@@ -46,7 +46,7 @@ if uploaded_files is not None:
         new_df = df
         new_df.iloc[:,0] = new_df.iloc[:,0].str.removeprefix("result/$S_testbench/$RS_Testrig_output/$S_testbench.$X_")
         st.write(new_df)
-        full_df = pd.concat([full_df, new_df])
+        full_df = pd.concat([full_df, new_df], ignore_index= True)
 
         # create bar graph to display data
         #fig, ax = plt.subplots()
@@ -57,14 +57,18 @@ if uploaded_files is not None:
 
     st.write(full_df)
 
+    #remove duplicates and sort list alphabetically
     axis_list = sorted(rem_duplicates(full_df.iloc[:,0]))
 
-
+    #create a drop down to choose axis
     x_axis = st.sidebar.selectbox("Select X axis", axis_list)
     y_axis = st.sidebar.selectbox("Select Y axis", axis_list)
 
-    pog_df = full_df.loc[[x_axis, y_axis],:]
-    st.dataframe(pog_df)
+    #change index to axis names
+    full_df.set_index('time', inplace=True)
+    st.write(full_df)
+    pog_df = full_df.loc[[x_axis, y_axis]]
+    st.write(pog_df)
 
 
 
