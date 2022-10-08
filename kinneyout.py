@@ -97,11 +97,3 @@ if len(uploaded_files) != 0 and len(uploaded_files) <= 5:
     st.write(full_df)
     set_df = full_df.loc[[x_axis, y_axis]]
     st.write(set_df)
-
-
-
-
-
-    
-
-
