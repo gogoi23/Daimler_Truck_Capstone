@@ -384,7 +384,7 @@ if len(uploaded_files) != 0 and len(uploaded_files) <= 5:
 
         
 
-    #make plot using user-selected rows of data
+    #make plot using user-selected rows of data. 
     data_plot = plot.plot(np.array([mathXAxis, mathYAxis]))
     st.plotly_chart(data_plot)
 
