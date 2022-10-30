@@ -7,6 +7,8 @@ import streamlit as st
 
 import plot # gc
 
+numYaxises = 0
+
 # initial page config
 st.set_page_config(
      page_title="Kinney:Out",
@@ -120,7 +122,7 @@ if len(uploaded_files) != 0 and len(uploaded_files) <= 5:
         
         filename = parse_filename(uploaded_file.name)
         st.write("filename:", filename["mt"])
-        st.write(df)
+        #st.write(df)
        
 
         #create a new df for manipulating
@@ -156,11 +158,13 @@ if len(uploaded_files) != 0 and len(uploaded_files) <= 5:
     math_functions = [None, "Sum", "Difference", "Mutliplication", "Division", "Average"]
 
     def plot_it(x_axis_key,x_axis_secondary_key,x_axis_math_key,y_axis_key,y_axis_secondary_key,y_axis_math_key, cancel):
+        
+        
 
         axises_array = [] #all the arrays that get plotted
 
     
-        # Store the initial value of widgets 
+        # Store the initial math value of widgets 
         x_math_widget = True
         y_math_widget = True
         
@@ -188,10 +192,13 @@ if len(uploaded_files) != 0 and len(uploaded_files) <= 5:
         else:
             y_math_widget = True
         y_axis_math = st.sidebar.selectbox("Select Y axis", math_functions, label_visibility="collapsed", key=y_axis_math_key, disabled= y_math_widget)
+        
+        if st.sidebar.button("Add an aditional graph"):
+            print("The user wants to make an additional graph")
 
         #change index to axis names
-        if cancel:
-            full_df.set_index('time', inplace=True)
+        #if cancel:
+            #full_df.set_index('time', inplace=True)
         
         st.write(full_df)
    
@@ -199,8 +206,8 @@ if len(uploaded_files) != 0 and len(uploaded_files) <= 5:
         set_df = full_df.loc[axises_array]
         st.write(set_df)
 
+        mathYAxis = [] 
         mathXAxis = []
-        mathYAxis = []  
 
         if not x_math_widget:
             mathXAxis = mathTwoLists(set_df,x_axis,x_axis_secondary,x_axis_math)
@@ -228,8 +235,71 @@ if len(uploaded_files) != 0 and len(uploaded_files) <= 5:
         data_plot = plot.plot_plotly(np.array([mathXAxis, mathYAxis]))
         st.plotly_chart(data_plot)
     
-    plot_it("x_axis_key","x_axis_secondary_key","x_axis_math_key","y_axis_key","y_axis_secondary_key","y_axis_math_key",True)
-    plot_it("x_axis_key2","x_axis_secondary_key2","x_axis_math_key2","y_axis_key2","y_axis_secondary_key2","y_axis_math_key2",False)
-    plot_it("x_axis_key3","x_axis_secondary_key3","x_axis_math_key3","y_axis_key3","y_axis_secondary_key3","y_axis_math_key3",False)
-    plot_it("x_axis_key4","x_axis_secondary_key4","x_axis_math_key4","y_axis_key4","y_axis_secondary_key4","y_axis_math_key4",False)
-    plot_it("x_axis_key5","x_axis_secondary_key5","x_axis_math_key5","y_axis_key5","y_axis_secondary_key5","y_axis_math_key5",False)
+
+
+
+    def plot_itV2(axis_key, axis_secondary_key,axis_math_key,cancel,sideBarName,optional):
+        axises_array = [] #all the arrays that get plotted
+
+        # Store the initial math value of widgets 
+        math_widget = True
+        
+        #create a drop down to choose axis
+        if not optional:
+            axis = st.sidebar.selectbox(sideBarName, axis_list, key=axis_key)
+        else:
+            axis = st.sidebar.selectbox(sideBarName, [None] + axis_list, key=axis_key)
+        
+        axises_array.append(axis)
+
+
+        axis_secondary = st.sidebar.selectbox(sideBarName, [None] + axis_list, label_visibility="collapsed", key= axis_secondary_key)
+        if axis_secondary is not None:
+            math_widget = False
+            axises_array.append(axis_secondary)
+        else:
+            math_widget = True
+        axis_math = st.sidebar.selectbox(sideBarName, math_functions, label_visibility="collapsed", key=axis_math_key, disabled= math_widget)
+
+        
+
+        #change index to axis names
+        print(full_df)
+        if cancel:
+            full_df.set_index('time', inplace=True)
+        
+        set_df = full_df.loc[axises_array]
+        
+        if axis == "None":
+            arr = np.empty(0)
+            return arr
+
+        mathAxis = []
+        if not math_widget:
+            mathAxis = mathTwoLists(set_df,axis,axis_secondary,axis_math)
+        else:
+            mathAxis = np.array(set_df.loc[axis])
+        
+        return mathAxis
+        
+
+        
+        
+
+    #plot_it("x_axis_key","x_axis_secondary_key","x_axis_math_key","y_axis_key","y_axis_secondary_key","y_axis_math_key",True)
+    #plot_it("x_axis_key2","x_axis_secondary_key2","x_axis_math_key2","y_axis_key2","y_axis_secondary_key2","y_axis_math_key2",False)
+    #plot_it("x_axis_key3","x_axis_secondary_key3","x_axis_math_key3","y_axis_key3","y_axis_secondary_key3","y_axis_math_key3",False)
+    #plot_it("x_axis_key4","x_axis_secondary_key4","x_axis_math_key4","y_axis_key4","y_axis_secondary_key4","y_axis_math_key4",False)
+    #plot_it("x_axis_key5","x_axis_secondary_key5","x_axis_math_key5","y_axis_key5","y_axis_secondary_key5","y_axis_math_key5",False)
+    st.write(full_df)
+    yAxises = []
+    xAxis = plot_itV2("x_axis_key", "x_axis_secondary_key", "x_axis_math_key", True,"Select the X axis",False)
+    yAxis1 = plot_itV2("y_axis_key", "y_axis_secondary_key", "y_axis_math_key", False,"Select the Y axis",False)
+    yAxis2 = plot_itV2("y_axis_key2", "y_axis_secondary_key2", "y_axis_math_key2", False,"OPTIONAL: Select the another Y axis to graph",True)
+    #yAxis3 = plot_itV2("y_axis_key3", "y_axis_secondary_key3", "y_axis_math_key3", False,"OPTIONAL: Select the another Y axis to graph",True)
+    #yAxis4 = plot_itV2("y_axis_key4", "y_axis_secondary_key4", "y_axis_math_key4", False,"OPTIONAL: Select the another Y axis to graph",True)
+    #yAxis5 = plot_itV2("y_axis_key5", "y_axis_secondary_key5", "y_axis_math_key5", False,"OPTIONAL: Select the another Y axis to graph",True)
+    #print(yAxis2)
+    
+    
+    
