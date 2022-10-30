@@ -216,12 +216,12 @@ if len(uploaded_files) != 0 and len(uploaded_files) <= 5:
 
         #change index to axis names
         #if cancel:
-            #full_df.set_index('time', inplace=True)
+            #all_df.set_index('time', inplace=True)
         
-        st.write(full_df)
+        st.write(all_df)
    
-        #set_df = full_df.loc[[x_axis, y_axis]]
-        set_df = full_df.loc[axises_array]
+        #set_df = all_df.loc[[x_axis, y_axis]]
+        set_df = all_df.loc[axises_array]
         st.write(set_df)
 
         mathYAxis = [] 
@@ -282,11 +282,11 @@ if len(uploaded_files) != 0 and len(uploaded_files) <= 5:
         
 
         #change index to axis names
-        print(full_df)
+        print(all_df)
         if cancel:
-            full_df.set_index('time', inplace=True)
+            all_df.set_index('time', inplace=True)
         
-        set_df = full_df.loc[axises_array]
+        set_df = all_df.loc[axises_array]
         
         if axis == "None":
             arr = np.empty(0)
@@ -309,7 +309,7 @@ if len(uploaded_files) != 0 and len(uploaded_files) <= 5:
     #plot_it("x_axis_key3","x_axis_secondary_key3","x_axis_math_key3","y_axis_key3","y_axis_secondary_key3","y_axis_math_key3",False)
     #plot_it("x_axis_key4","x_axis_secondary_key4","x_axis_math_key4","y_axis_key4","y_axis_secondary_key4","y_axis_math_key4",False)
     #plot_it("x_axis_key5","x_axis_secondary_key5","x_axis_math_key5","y_axis_key5","y_axis_secondary_key5","y_axis_math_key5",False)
-    st.write(full_df)
+    st.write(all_df)
     yAxises = []
     #xAxis = plot_itV2("x_axis_key", "x_axis_secondary_key", "x_axis_math_key", True,"Select the X axis",False)
     #yAxis1 = plot_itV2("y_axis_key", "y_axis_secondary_key", "y_axis_math_key", False,"Select the Y axis",False)
