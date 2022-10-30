@@ -23,6 +23,7 @@ def plot_subplots(data, x_lim=None, y_lim=None,
             go.Scatter(x=X, y=y_ax, mode='lines', name=str(i)),
             row = i+1, col = 1
         )
+        
         #customizing subplot
         #fig.update_xaxes(title_text=xtitle, range=x_lim, row=i+1, col=1)
         #fig.update_yaxes(title_text=ytitle, range=y_lim, row=i+1, col=1)
