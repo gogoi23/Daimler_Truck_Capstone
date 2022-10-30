@@ -101,5 +101,5 @@ if len(uploaded_files) != 0 and len(uploaded_files) <= 5:
     st.write(set_df)
 
     #make plot using user-selected rows of data
-    data_plot = plot.plot_plotly(set_df)
+    data_plot = plot.plot(set_df)
     st.plotly_chart(data_plot)
