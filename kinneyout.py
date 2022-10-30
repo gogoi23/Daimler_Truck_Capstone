@@ -7,6 +7,8 @@ import numpy as np
 from requests import session
 import streamlit as st
 
+import plot
+
 # initial page config
 st.set_page_config(
      page_title="Kinney:Out",
@@ -129,12 +131,9 @@ if len(uploaded_files) != 0 and len(uploaded_files) <= 5:
     y_axis = axis_set(y_axis_primary, y_axis_secondary, y_axis_math)
 
     #change index to axis names
-    #new_df.set_index('time', inplace=True)
-    #set_df = new_df.loc[[x_axis, y_axis]]
-    #st.write(set_df)
+    set_df = get_data(all_df, selected_graph, x_axis_primary, y_axis_primary).transpose()
+    st.write(set_df)
 
-    st.write(get_data(all_df, selected_graph, x_axis_primary, y_axis_primary).transpose())
-    
-    #st.session_state[selected_graph] = update_dict(graph_title, x_axis, y_axis)
-    
-    st.write(st.session_state)
+    #make plot using user-selected rows of data
+    data_plot = plot.plot(set_df)
+    st.plotly_chart(data_plot)
