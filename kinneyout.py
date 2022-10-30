@@ -10,6 +10,7 @@ import streamlit as st
 import plot
 
 
+
 # initial page config
 st.set_page_config(
      page_title="Kinney:Out",
@@ -216,12 +217,12 @@ if len(uploaded_files) != 0 and len(uploaded_files) <= 5:
 
         #change index to axis names
         #if cancel:
-            #all_df.set_index('time', inplace=True)
+            #full_df.set_index('time', inplace=True)
         
-        st.write(all_df)
+        st.write(full_df)
    
-        #set_df = all_df.loc[[x_axis, y_axis]]
-        set_df = all_df.loc[axises_array]
+        #set_df = full_df.loc[[x_axis, y_axis]]
+        set_df = full_df.loc[axises_array]
         st.write(set_df)
 
         mathYAxis = [] 
@@ -282,11 +283,11 @@ if len(uploaded_files) != 0 and len(uploaded_files) <= 5:
         
 
         #change index to axis names
-        print(all_df)
+        print(full_df)
         if cancel:
-            all_df.set_index('time', inplace=True)
+            full_df.set_index('time', inplace=True)
         
-        set_df = all_df.loc[axises_array]
+        set_df = full_df.loc[axises_array]
         
         if axis == "None":
             arr = np.empty(0)
@@ -309,8 +310,8 @@ if len(uploaded_files) != 0 and len(uploaded_files) <= 5:
     #plot_it("x_axis_key3","x_axis_secondary_key3","x_axis_math_key3","y_axis_key3","y_axis_secondary_key3","y_axis_math_key3",False)
     #plot_it("x_axis_key4","x_axis_secondary_key4","x_axis_math_key4","y_axis_key4","y_axis_secondary_key4","y_axis_math_key4",False)
     #plot_it("x_axis_key5","x_axis_secondary_key5","x_axis_math_key5","y_axis_key5","y_axis_secondary_key5","y_axis_math_key5",False)
-    st.write(all_df)
-    yAxises = []
+    #st.write(full_df)
+    #syAxises = []
     #xAxis = plot_itV2("x_axis_key", "x_axis_secondary_key", "x_axis_math_key", True,"Select the X axis",False)
     #yAxis1 = plot_itV2("y_axis_key", "y_axis_secondary_key", "y_axis_math_key", False,"Select the Y axis",False)
     #yAxis2 = plot_itV2("y_axis_key2", "y_axis_secondary_key2", "y_axis_math_key2", False,"OPTIONAL: Select the another Y axis to graph",True)
@@ -343,6 +344,52 @@ if len(uploaded_files) != 0 and len(uploaded_files) <= 5:
     set_df = get_data(all_df, selected_graph, x_axis_primary, y_axis_primary).transpose()
     st.write(set_df)
 
-    #make plot using user-selected rows of data
-    data_plot = plot.plot(set_df)
+    #this returns a numpy array of two lists added together 
+    def mathV3(df, tb, x, y,axis_math):
+        axis1 = np.array(df.loc[tb].loc[x].values)#gets the x-axis from the df
+        axis2 = np.array(df.loc[tb].loc[y].values)#gets the other x-axis from the df
+        
+        returnValue = []
+        if(axis_math == "Sum"):
+            returnValue = np.add(axis1, axis2) 
+        elif(axis_math == "Difference"):
+            returnValue = np.subtract(axis1, axis2) 
+        elif (axis_math == "Mutliplication"):
+            returnValue = np.multiply(axis1, axis2)
+        elif (axis_math == "Division"):
+            returnValue = np.divide(axis1, axis2)
+        elif (axis_math == "Average"):
+            returnValue1 = np.add(axis1, axis2) 
+            returnValue = returnValue1/2
+        print(returnValue)
+        return returnValue
+
+    #These Axises get graphed
+    mathYAxis = [] 
+    mathXAxis = []
+
+    #Adds the two arrays together element wise if the user has decided to preform math operations.
+    #This new array becomes the axis. Otherwise it just uses the singular graph 
+    if x_math_widget == False:
+        mathXAxis = mathV3(all_df, selected_graph, x_axis_primary, x_axis_secondary,x_axis_math)
+    else: 
+        mathXAxis = np.array(all_df.loc[selected_graph].loc[x_axis_primary].values)
+
+    #Adds the two arrays together element wise if the user has decided to preform math operations.
+    #This new array becomes the axis. Otherwise it just uses the singular graph       
+    if y_math_widget == False:
+       mathYAxis = mathV3(all_df, selected_graph, y_axis_primary, y_axis_secondary,y_axis_math)
+    else:
+        mathYAxis = np.array(all_df.loc[selected_graph].loc[y_axis_primary].values)
+
+        
+
+    #make plot using user-selected rows of data. 
+    data_plot = plot.plot(np.array([mathXAxis, mathYAxis]))
     st.plotly_chart(data_plot)
+
+        
+    
+    #make plot using user-selected rows of data
+    #data_plot = plot.plot(set_df)
+    #st.plotly_chart(data_plot)

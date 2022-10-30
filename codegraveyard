@@ -1,0 +1,42 @@
+def math(axis_list, operation):
+    returnValue = []
+    for cord in axis_list[0]:
+        if operation == "Sum":
+            returnValue.append(0) 
+        if operation == "Difference" or operation == "Division":
+            returnValue.append(cord)
+        if operation == "Mutliplication":
+            returnValue.append(1) 
+        
+    if operation == "Sum":
+        for list in axis_list:
+            counter = 0
+            for cord in list:
+                returnValue[counter] = returnValue[counter] + cord
+                counter = counter + 1
+    if operation == "Mutliplication":
+        for list in axis_list:
+            counter = 0
+            for cord in list:
+                returnValue[counter] = returnValue[counter] * cord
+                counter = counter + 1
+    if operation == "Difference": 
+        counter = 0
+        for list in axis_list:
+            counter2 = 0
+            if counter > 0:
+                for cord in list:
+                    returnValue[counter2] = returnValue[counter2] - cord
+                    counter2 = counter2 + 1    
+            counter = counter + 1
+    
+    if operation == "Division": 
+        counter = 0
+        for list in axis_list:
+            counter2 = 0
+            if counter > 0:
+                for cord in list:
+                    returnValue[counter2] = returnValue[counter2] / cord
+                    counter2 = counter2 + 1    
+            counter = counter + 1 
+    return returnValue
