@@ -1,3 +1,3 @@
 import subprocess
 
-subprocess.run("python -m streamlit run kinneyput.py")
+subprocess.run("python -m streamlit run kinneyout.py")

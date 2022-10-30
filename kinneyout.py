@@ -4,6 +4,8 @@ import pandas as pd
 import numpy as np
 import streamlit as st
 
+import plot
+
 # initial page config
 st.set_page_config(
      page_title="Kinney:Out",
@@ -97,3 +99,7 @@ if len(uploaded_files) != 0 and len(uploaded_files) <= 5:
     st.write(full_df)
     set_df = full_df.loc[[x_axis, y_axis]]
     st.write(set_df)
+
+    #make plot using user-selected rows of data
+    data_plot = plot.plot(set_df)
+    st.plotly_chart(data_plot)
