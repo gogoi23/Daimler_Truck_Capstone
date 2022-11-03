@@ -1,5 +1,7 @@
 # importing the required module
+from cgitb import reset
 from codecs import ignore_errors
+import re
 from select import select
 import matplotlib.pyplot as plt
 import pandas as pd
@@ -40,100 +42,70 @@ def parse_filename(name):
 
     return {"mt": model_template, "tv": test_variant, "tb": test_bench, "tlc": test_load_case}
 
-#get all datasets based on test bench name passed in paramenter, return list
-def get_axis(tb):
-    temp_list = [ x for x in all_df.index.tolist() if x[0] == tb ]
+#get second index based on df and keyword passed in paramenter, return list
+def get_axis(d, key):
+    temp_list = [ x for x in d.index.tolist() if x[0] == key ]
     axis = [x[1] for x in temp_list]
     return axis
-
-#get row based on test bench name and dataset passed in parameter, return row
-def get_data(df, tb, x, y):
-    df1 = df.loc[tb].loc[x]
-    df2 = df.loc[tb].loc[y]
-    return pd.concat([df1, df2], axis=1)
-
-def axis_set(x, x2, xfunc):
-    return [x, x2, xfunc]
 
 #create dict based on graph selection and options
 def update_dict(df_name, x, y):
     return {"df_name":df_name, "x_axis":x[0], "x_secondary":x[1], "x_math":x[2], "y_axis":y[0], "y_secondary":y[1], "y_math":y[2]}
+
+#this returns a numpy array of two lists added together 
+def math(df, tb, x, y, axis_math):
+    axis1 = np.array(df.loc[tb].loc[x].values)#gets the x-axis from the df
+    axis2 = np.array(df.loc[tb].loc[y].values)#gets the other x-axis from the df
     
-#get df
-#str(df_list[df_name_list.index(selected_graph)])
-
-numYaxises = 0
-
-
-#This function preforms math functions on two lists element wise
-#It returns a numpy list 
-#param set_df: The data frame that contains the axises we are extracting data from
-#param axis: the first list that has math done on it. This is the left side of the operation
-#param axis_secondary: The other list that gets math done on it. This is the right side of the operation
-#param axis_math: This specifies which opera tation to do. 
-def mathTwoLists(set_df,axis,axis_secondary,axis_math):
-    axis1 = np.array(set_df.loc[axis])
-    axis2 = np.array(set_df.loc[axis_secondary])
-    returnValue = []
-    print(axis_math)
+    return_value = []
     if(axis_math == "Sum"):
-        returnValue = np.add(axis1, axis2) 
+        return_value = np.add(axis1, axis2) 
     elif(axis_math == "Difference"):
-        returnValue = np.subtract(axis1, axis2) 
+        return_value = np.subtract(axis1, axis2) 
     elif (axis_math == "Mutliplication"):
-        returnValue = np.multiply(axis1, axis2)
+        return_value = np.multiply(axis1, axis2)
     elif (axis_math == "Division"):
-        returnValue = np.divide(axis1, axis2)
+        return_value = np.divide(axis1, axis2)
     elif (axis_math == "Average"):
-        returnValue1 = np.add(axis1, axis2) 
-        returnValue = returnValue1/2
-    return returnValue
+        return_value1 = np.add(axis1, axis2) 
+        return_value = return_value1/2
+    print(return_value)
+    return return_value
 
-def math(axis_list, operation):
-    returnValue = []
-    for cord in axis_list[0]:
-        if operation == "Sum":
-            returnValue.append(0) 
-        if operation == "Difference" or operation == "Division":
-            returnValue.append(cord)
-        if operation == "Mutliplication":
-            returnValue.append(1) 
-        
-    if operation == "Sum":
-        for list in axis_list:
-            counter = 0
-            for cord in list:
-                returnValue[counter] = returnValue[counter] + cord
-                counter = counter + 1
-    if operation == "Mutliplication":
-        for list in axis_list:
-            counter = 0
-            for cord in list:
-                returnValue[counter] = returnValue[counter] * cord
-                counter = counter + 1
-    if operation == "Difference": 
-        counter = 0
-        for list in axis_list:
-            counter2 = 0
-            if counter > 0:
-                for cord in list:
-                    returnValue[counter2] = returnValue[counter2] - cord
-                    counter2 = counter2 + 1    
-            counter = counter + 1
+#create a new axis based on axises selected and math function
+def create_axis(df, ds, a_math, m):
+    new_axis = None
+    #error checking to make sure only two selected
+    if len(a_math) == 2:
+        #create new axis
+        new_axis = math(df, ds, a_math[0], a_math[1], m)
+        st.success('New axis added', icon="✅")
+    else:
+        st.error('Please select two axises to create a new axis', icon="🚨")
+
+    #return array of values
+    return new_axis
+
+#update session state
+def update_session_state(df, ds, a_math, m):
+    #get new values
+    new_vals = create_axis(df, ds, a_math, m)
+
+    #making sure two values were added
+    if new_vals is not None:
+        #ensure df is correct shape
+        temp_df = pd.DataFrame(new_vals).transpose()
+        #add new indices to match main df
+        new_df = temp_df.assign(test=ds) 
+        new_df = new_df.assign(dataset=m + "(" + a_math[0] + ", " + a_math[1] + ")")
+        new_df.set_index(['test','dataset'], inplace=True)
+
+        #update session state to call new values
+        st.session_state.df = pd.concat([st.session_state.df, new_df])
     
-    if operation == "Division": 
-        counter = 0
-        for list in axis_list:
-            counter2 = 0
-            if counter > 0:
-                for cord in list:
-                    returnValue[counter2] = returnValue[counter2] / cord
-                    counter2 = counter2 + 1    
-            counter = counter + 1 
-    return returnValue
 
 st.title("Welcome to the Kinney:Out Results Viewer")
-uploaded_files = st.file_uploader("Please select datasets to be graphed.", accept_multiple_files=True)
+uploaded_files = st.file_uploader("Please select datasets to be graphed.", accept_multiple_files=True, type=['csv'])
 
 #create a df that is a concationation of all .csv files
 all_df = pd.DataFrame()
@@ -143,9 +115,11 @@ df_list = []
 df_name_list = []
 
 #check whether user has uploaded any files
-if len(uploaded_files) != 0 and len(uploaded_files) <= 5:
+if len(uploaded_files) != 0:
     #if so, run through files and run rest of code
     axis_list = []
+
+    #go through all files and add it to a main dataframe
     for uploaded_file in uploaded_files:
         #read csv file and convert to df
         df = pd.read_csv(uploaded_file)
@@ -154,7 +128,7 @@ if len(uploaded_files) != 0 and len(uploaded_files) <= 5:
         filenames = parse_filename(uploaded_file.name)
 
         #add filename to list to choose from
-        df_name_list.append(filenames['tv'])
+        df_name_list.append(filenames['tv']+filenames["tlc"])
 
         #create a temporary df for manipulation
         temp_df = df
@@ -163,20 +137,73 @@ if len(uploaded_files) != 0 and len(uploaded_files) <= 5:
         temp_df.iloc[:,0] = temp_df.iloc[:,0].str.removeprefix("result/$S_testbench/$RS_Testrig_output/$S_testbench.$X_")
 
         #add another column based on file and add it to the index to create a MultiIndex
-        temp_df = temp_df.assign(test = filenames["tv"])
+        temp_df = temp_df.assign(test = filenames["tv"]+filenames["tlc"])
         temp_df.set_index(['test','time'], inplace=True)
-        temp_df.rename(index={'times':'dataset'})
+        temp_df.rename(index={'time':'dataset'})
 
         #add tempoary df to df holding all df's
         all_df = pd.concat([all_df, temp_df])
+
+    all_df.columns = range(all_df.shape[1])
+
+    if 'df' not in st.session_state:
+        st.session_state.df = pd.DataFrame()
         
-    st.write(all_df)
-    
-    selected_graph = st.sidebar.selectbox("Select graph to work on", df_name_list, key="data_select")
-    axis_list = get_axis(selected_graph)
+    all_axis_df = pd.concat([all_df, st.session_state.df])
     
     #create a list for choose math functions
     math_functions = ["Sum", "Difference", "Mutliplication", "Division", "Average"]
+
+    #select box widget to choose vehicle dataset
+    selected_graph = st.sidebar.selectbox("Select graph to work on", df_name_list, key="data_select")
+    axis_list = get_axis(all_df, selected_graph)
+
+    #form to create a new axis based on math functions
+    with st.sidebar.form("add axis", clear_on_submit=True):
+        #multiselect widget to select two axises
+        axis_math = st.multiselect("Select two existing axises to create a new axis", axis_list, key="axis_math", max_selections=2)
+        #select widget to select a math function
+        math_widget = st.selectbox("Select math function", math_functions, label_visibility="collapsed", key="math_widget")
+
+        #form sumbit button
+        add_axis_submit = st.form_submit_button("Create new axis")
+        if add_axis_submit:
+            #adds to session state and creates row based on math functions
+            update_session_state(all_df, selected_graph, axis_math, math_widget)
+            #update all_axis_df based on added rows
+            all_axis_df = pd.concat([all_df, st.session_state.df])
+    
+    #form to create graph
+    with st.sidebar.form("add graph"):
+        x_axis = st.selectbox("Select an X axis", axis_list, key="x_axis")
+        y_axis = st.multiselect("Select up to five Y axises", get_axis(all_axis_df, selected_graph), key="y_axis")
+        update_graph_submit = st.form_submit_button("Update graph")
+        if update_graph_submit:
+            st.write("axises", x_axis, y_axis)
+
+    #form to delete graph
+    with st.sidebar.form("del axis", clear_on_submit=True):
+        #multiselect widget to pull ONLY created axis
+        sel_axis = st.multiselect("Select an axis to delete", get_axis(st.session_state.df, selected_graph), key="del_axis")
+        #create a temp df to work on
+        temp_session_state = st.session_state.df
+
+        #form submit button
+        del_axis_submit = st.form_submit_button("Delete axis")
+        if del_axis_submit:
+            #interate through selected axises
+            for x in sel_axis:
+                #delete row based on selected axises
+                temp_session_state.drop(index=(selected_graph, x), inplace=True)
+            #update session state based on deleted rows
+            st.session_state.df = temp_session_state
+            #update all_axis_df based on deleted rows
+            all_axis_df = pd.concat([all_df, st.session_state.df])
+
+
+    st.write(st.session_state.df)
+    st.write(all_axis_df)
+    
 
     def plot_it(x_axis_key,x_axis_secondary_key,x_axis_math_key,y_axis_key,y_axis_secondary_key,y_axis_math_key, cancel): 
 
@@ -214,15 +241,11 @@ if len(uploaded_files) != 0 and len(uploaded_files) <= 5:
         
         if st.sidebar.button("Add an aditional graph"):
             print("The user wants to make an additional graph")
-
-        #change index to axis names
-        #if cancel:
-            #full_df.set_index('time', inplace=True)
         
-        st.write(full_df)
+        st.write(all_df)
    
-        #set_df = full_df.loc[[x_axis, y_axis]]
-        set_df = full_df.loc[axises_array]
+        #set_df = all_df.loc[[x_axis, y_axis]]
+        set_df = all_df.loc[axises_array]
         st.write(set_df)
 
         mathYAxis = [] 
@@ -253,10 +276,6 @@ if len(uploaded_files) != 0 and len(uploaded_files) <= 5:
         #make plot using user-selected rows of data
         data_plot = plot.plot_plotly(np.array([mathXAxis, mathYAxis]))
         st.plotly_chart(data_plot)
-    
-
-
-
     def plot_itV2(axis_key, axis_secondary_key,axis_math_key,cancel,sideBarName,optional):
         axises_array = [] #all the arrays that get plotted
 
@@ -283,11 +302,11 @@ if len(uploaded_files) != 0 and len(uploaded_files) <= 5:
         
 
         #change index to axis names
-        print(full_df)
+        print(all_df)
         if cancel:
-            full_df.set_index('time', inplace=True)
+            all_df.set_index('time', inplace=True)
         
-        set_df = full_df.loc[axises_array]
+        set_df = all_df.loc[axises_array]
         
         if axis == "None":
             arr = np.empty(0)
@@ -301,95 +320,29 @@ if len(uploaded_files) != 0 and len(uploaded_files) <= 5:
         
         return mathAxis
         
-
-        
-  
-
-    #plot_it("x_axis_key","x_axis_secondary_key","x_axis_math_key","y_axis_key","y_axis_secondary_key","y_axis_math_key",True)
-    #plot_it("x_axis_key2","x_axis_secondary_key2","x_axis_math_key2","y_axis_key2","y_axis_secondary_key2","y_axis_math_key2",False)
-    #plot_it("x_axis_key3","x_axis_secondary_key3","x_axis_math_key3","y_axis_key3","y_axis_secondary_key3","y_axis_math_key3",False)
-    #plot_it("x_axis_key4","x_axis_secondary_key4","x_axis_math_key4","y_axis_key4","y_axis_secondary_key4","y_axis_math_key4",False)
-    #plot_it("x_axis_key5","x_axis_secondary_key5","x_axis_math_key5","y_axis_key5","y_axis_secondary_key5","y_axis_math_key5",False)
-    #st.write(full_df)
-    #syAxises = []
-    #xAxis = plot_itV2("x_axis_key", "x_axis_secondary_key", "x_axis_math_key", True,"Select the X axis",False)
-    #yAxis1 = plot_itV2("y_axis_key", "y_axis_secondary_key", "y_axis_math_key", False,"Select the Y axis",False)
-    #yAxis2 = plot_itV2("y_axis_key2", "y_axis_secondary_key2", "y_axis_math_key2", False,"OPTIONAL: Select the another Y axis to graph",True)
-    #yAxis3 = plot_itV2("y_axis_key3", "y_axis_secondary_key3", "y_axis_math_key3", False,"OPTIONAL: Select the another Y axis to graph",True)
-    #yAxis4 = plot_itV2("y_axis_key4", "y_axis_secondary_key4", "y_axis_math_key4", False,"OPTIONAL: Select the another Y axis to graph",True)
-    #yAxis5 = plot_itV2("y_axis_key5", "y_axis_secondary_key5", "y_axis_math_key5", False,"OPTIONAL: Select the another Y axis to graph",True)
-    #print(yAxis2)
-    
-    
-    #create a drop down to choose axis
-    x_axis_primary = st.sidebar.selectbox("Select X axis", axis_list, key="x_axis_primary")
-    x_axis_secondary = st.sidebar.selectbox("Select X axis", [None] + axis_list, label_visibility="collapsed", key="x_axis_secondary")
-    if x_axis_secondary is not None:
-        x_math_widget = False
-    else:
-        x_math_widget = True
-    x_axis_math = st.sidebar.selectbox("Select X axis", math_functions, label_visibility="collapsed", key="x_axis_math", disabled= x_math_widget)
-    x_axis = axis_set(x_axis_primary, x_axis_secondary, x_axis_math)
-
-    y_axis_primary = st.sidebar.selectbox("Select Y axis", axis_list, key="y_axis_primary")
-    y_axis_secondary = st.sidebar.selectbox("Select Y axis", [None] + axis_list, label_visibility="collapsed", key="y_axis_secondary")
-    if y_axis_secondary is not None:
-        y_math_widget = False
-    else:
-        y_math_widget = True
-    y_axis_math = st.sidebar.selectbox("Select Y axis", math_functions, label_visibility="collapsed", key="y_axis_math", disabled= y_math_widget)
-    y_axis = axis_set(y_axis_primary, y_axis_secondary, y_axis_math)
-
-    #get data
-    set_df = get_data(all_df, selected_graph, x_axis_primary, y_axis_primary).transpose()
-    st.write(set_df)
-
-    #this returns a numpy array of two lists added together 
-    def mathV3(df, tb, x, y,axis_math):
-        axis1 = np.array(df.loc[tb].loc[x].values)#gets the x-axis from the df
-        axis2 = np.array(df.loc[tb].loc[y].values)#gets the other x-axis from the df
-        
-        returnValue = []
-        if(axis_math == "Sum"):
-            returnValue = np.add(axis1, axis2) 
-        elif(axis_math == "Difference"):
-            returnValue = np.subtract(axis1, axis2) 
-        elif (axis_math == "Mutliplication"):
-            returnValue = np.multiply(axis1, axis2)
-        elif (axis_math == "Division"):
-            returnValue = np.divide(axis1, axis2)
-        elif (axis_math == "Average"):
-            returnValue1 = np.add(axis1, axis2) 
-            returnValue = returnValue1/2
-        print(returnValue)
-        return returnValue
-
+   
     #These Axises get graphed
     mathYAxis = [] 
     mathXAxis = []
 
     #Adds the two arrays together element wise if the user has decided to preform math operations.
     #This new array becomes the axis. Otherwise it just uses the singular graph 
-    if x_math_widget == False:
-        mathXAxis = mathV3(all_df, selected_graph, x_axis_primary, x_axis_secondary,x_axis_math)
-    else: 
-        mathXAxis = np.array(all_df.loc[selected_graph].loc[x_axis_primary].values)
+    #if x_math_widget == False:
+    #    mathXAxis = mathV3(all_df, selected_graph, x_axis_primary, x_axis_secondary,x_axis_math)
+    #else: 
+    #    mathXAxis = np.array(all_df.loc[selected_graph].loc[x_axis_primary].values)
 
     #Adds the two arrays together element wise if the user has decided to preform math operations.
     #This new array becomes the axis. Otherwise it just uses the singular graph       
-    if y_math_widget == False:
-       mathYAxis = mathV3(all_df, selected_graph, y_axis_primary, y_axis_secondary,y_axis_math)
-    else:
-        mathYAxis = np.array(all_df.loc[selected_graph].loc[y_axis_primary].values)
-
-        
+    #if y_math_widget == False:
+    #   mathYAxis = mathV3(all_df, selected_graph, y_axis_primary, y_axis_secondary,y_axis_math)
+    #else:
+    #    mathYAxis = np.array(all_df.loc[selected_graph].loc[y_axis_primary].values)
+    #mathXAxis = np.array(all_axis_df.loc[selected_graph].loc[a].values)
+    #mathYAxis = np.array(all_axis_df.loc[selected_graph].loc[y_axis_primary].values)
+    print(mathYAxis)
+    print(mathXAxis)
 
     #make plot using user-selected rows of data. 
     data_plot = plot.plot(np.array([mathXAxis, mathYAxis]))
     st.plotly_chart(data_plot)
-
-        
-    
-    #make plot using user-selected rows of data
-    #data_plot = plot.plot(set_df)
-    #st.plotly_chart(data_plot)
