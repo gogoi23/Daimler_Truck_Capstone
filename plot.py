@@ -44,7 +44,7 @@ def plot(data, x_lim=None, y_lim=None, title=None,
     for i, y_ax in enumerate(Y):
         fig.add_trace(
             go.Scatter(x=X, y=y_ax, mode='lines',
-                       name=legends[i] if legends is not None else None)
+                       name=legends[i] if legends is not None else str(i))
         )
         
     #customize plot
@@ -60,36 +60,10 @@ def plot(data, x_lim=None, y_lim=None, title=None,
     #fig.show()
     return fig
 
-#Same functionality as plot()
-#Data must be pandas.DataFrame
-#Uses the index column as the labels for the legends
-#If index_as_legends is set to false, the function will use the 
-#first column instead
-def plot_px(data, index_as_legends=True, x_lim=None, y_lim=None,
-            title=None, x_title=None, y_title=None):
-    if not index_as_legends:
-        data.set_index(data.columns[0], inplace=True)
-    data = data.T
-    
-    #making the single plot with multiple lines
-    fig = px.line(data, x=data.columns[0], y=data.columns[1:],
-                  range_x=x_lim, range_y=y_lim, title=title)
-    
-    #customizing plot
-    fig.update_layout(
-        title=title,
-        xaxis_title=x_title,
-        yaxis_title=y_title
-        #,legend_title=""
-    )
-    
-    #fig.show()
-    return fig
-
 #updates figure with many different options
 def update(fig, title=None, x_lim=None, y_lim=None, x_title=None, y_title=None,
            quad1_title=None, quad2_title=None, quad3_title=None, quad4_title=None,
-           x_offset=0, y_offset=0, x_gridlines=True, y_gridlines=True):
+           x_offsets=[], y_offsets=[],  x_gridlines=True, y_gridlines=True):
     
     fig.update_layout(
         title=title,
@@ -124,9 +98,9 @@ def update(fig, title=None, x_lim=None, y_lim=None, x_title=None, y_title=None,
         x=1-margin, y=margin,showarrow=False
     )
     
-    for trace in fig.data:
-        trace['x'] = np.add(trace['x'], x_offset)
-        trace['y'] = np.add(trace['y'], y_offset)
+    for trace, x_off, y_off in zip(fig.data, x_offsets, y_offsets):
+        trace['x'] = np.add(trace['x'], x_off)
+        trace['y'] = np.add(trace['y'], y_off)
         
     return fig
 

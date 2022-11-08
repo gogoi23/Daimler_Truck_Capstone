@@ -8,6 +8,7 @@ import pandas as pd
 import numpy as np
 from requests import session
 import streamlit as st
+from functools import partial
 
 import plot
 
@@ -102,64 +103,71 @@ def create_graph_df(d, x, y):
     y_df = d.query('test == @selected_graph and dataset == @y')
     return pd.concat([x_df, y_df])
 
+def adjust_trace(label, container):
+    col1, col2, col3 = container.columns(3)
+    x_off = col1.number_input(label + ' x-offset', value=0.0)
+    y_off = col2.number_input(label + ' y-offset', value=0.0)
+    legend_name = col3.text_input(label + ' name in legends')
+    return x_off, y_off, legend_name
+
 def customize_plot(fig):
     expander = st.expander('Adjust chart')
-    form = expander.form(key='update_plot')
-    
-    #getting current axes ranges of the plot
-    x_min = float(np.min(fig.data[0]['x']))
-    x_max = float(np.max(fig.data[0]['x']))
-    y_mins = []
-    y_maxs = []
-    for trace in fig.data:
-        y_mins = np.append(y_mins, np.min(trace['y']))
-        y_maxs = np.append(y_maxs, np.max(trace['y']))
-    y_min = float(np.min(y_mins))
-    y_max = float(np.max(y_maxs))
-    
-    plot_title = form.text_input('Chart title', placeholder='ex. Bump Steer', key='plot_title')
-    
-    col1, col2 = form.columns(2, gap='small')
-    #options to adjust x,y axes title
-    x_axis_title = col1.text_input('X-axis title', key='x_axis_title')
-    y_axis_title = col2.text_input('Y-axis title', key='y_axis_title')
-    
-    #options to adjust x,y axes bounds
-    # x_range = col1.slider('X-axis range', x_min, x_max, (x_min, x_max), key='x_axis_range')
-    # y_range = col2.slider('Y-axis range', y_min, y_max, (y_min, y_max), key='y_axis_range')
-    col1_1, col1_2, col2_1, col2_2 = form.columns(4)
-    x_axis_lower = col1_1.number_input('X-axis range', value=x_min, key='x_axis_lower')
-    x_axis_upper = col1_2.number_input('X-axis upper bound', value=x_max, key='x_axis_upper', label_visibility='hidden')
-    if x_axis_upper < x_axis_lower:
-        col1.error('Invalid range', icon="🚨")
-    y_axis_lower = col2_1.number_input('Y-axis range', value=y_min, key='y_axis_lower')
-    y_axis_upper = col2_2.number_input('Y-axis upper bound', value=y_max, key='y_axis_upper', label_visibility='hidden')
-    if y_axis_upper < y_axis_lower:
-        col2.error('Invalid range', icon="🚨")
-    col1, col2 = form.columns(2)
-    
-    #options to adjust x,y plot data
-    x_axis_offset = col1.number_input('X-axis offset', key='x_axis_offset')
-    y_axis_offset = col2.number_input('Y-axis offset', key='Y_axis_offset')
-    x_range = np.add([x_axis_lower, x_axis_upper], x_axis_offset)
-    y_range = np.add([y_axis_lower, y_axis_upper], y_axis_offset)
-
-    #options to add flags to the four quadrants
-    col1, col2, col3, col4 = form.columns(4)
-    quadrant1_title = col1.text_input('Quadrant I', key='quadrant1_title')
-    quadrant2_title = col2.text_input('Quadrant II', key='quadrant2_title')
-    quadrant3_title = col3.text_input('Quadrant III', key='quadrant3_title')
-    quadrant4_title = col4.text_input('Quadrant IV', key='quadrant4_title')
+    with expander.form(key='update_plot'):
+        #getting current axes ranges of the plot
+        x_min = float(np.min(fig.data[0]['x']))
+        x_max = float(np.max(fig.data[0]['x']))
+        y_mins = []
+        y_maxs = []
+        legends = []
+        for trace in fig.data:
+            y_mins = np.append(y_mins, np.min(trace['y']))
+            y_maxs = np.append(y_maxs, np.max(trace['y']))
+            legends = np.append(legends, trace['name'] if 'name' in trace else None)
+        y_min = float(np.min(y_mins))
+        y_max = float(np.max(y_maxs))
         
-    submitted = form.form_submit_button('Update chart')
-    reset = expander.button('Reset chart', key='reset_chart_button')
-    if submitted:
-        new_fig = plot.update(fig, x_lim=x_range, y_lim=y_range, title=plot_title,
-                              x_title=x_axis_title, y_title=y_axis_title,
-                              quad1_title=quadrant1_title, quad2_title=quadrant2_title,
-                              quad3_title=quadrant3_title, quad4_title=quadrant4_title,
-                              x_offset=x_axis_offset, y_offset=y_axis_offset)
-        return new_fig
+        plot_title = st.text_input('Chart title', placeholder='ex. Bump Steer', key='plot_title')
+        
+        col1, col2 = st.columns(2, gap='small')
+        #options to adjust x,y axes title
+        x_axis_title = col1.text_input('X-axis title', key='x_axis_title')
+        y_axis_title = col2.text_input('Y-axis title', key='y_axis_title')
+        
+        #options to adjust x,y axes bounds
+        col1_1, col1_2, col2_1, col2_2 = st.columns(4)
+        x_axis_lower = col1_1.number_input('X-axis range', value=x_min, step=0.0001,
+                                        format='%.4f', key='x_axis_lower')
+        x_axis_upper = col1_2.number_input('X-axis upper bound', value=x_max, step=0.0001, 
+                                        format='%.4f', key='x_axis_upper', label_visibility='hidden')
+        if x_axis_upper < x_axis_lower:
+            col1.error('Invalid range', icon="🚨")
+        y_axis_lower = col2_1.number_input('Y-axis range', value=y_min, step=0.0001, 
+                                        format='%.4f', key='y_axis_lower')
+        y_axis_upper = col2_2.number_input('Y-axis upper bound', value=y_max, step=0.0001, 
+                                        format='%.4f', key='y_axis_upper', label_visibility='hidden')
+        if y_axis_upper < y_axis_lower:
+            col2.error('Invalid range', icon="🚨")
+        x_range = [x_axis_lower, x_axis_upper]
+        y_range = [y_axis_lower, y_axis_upper]
+        
+        trace_update = np.array(list(map(partial(adjust_trace, container=st), legends)))
+
+        #options to add flags to the four quadrants
+        col1, col2, col3, col4 = st.columns(4)
+        quadrant1_title = col1.text_input('Quadrant I', key='quadrant1_title')
+        quadrant2_title = col2.text_input('Quadrant II', key='quadrant2_title')
+        quadrant3_title = col3.text_input('Quadrant III', key='quadrant3_title')
+        quadrant4_title = col4.text_input('Quadrant IV', key='quadrant4_title')
+            
+        submitted = st.form_submit_button('Update chart')
+        expander.button('Reset chart', key='reset_chart_button')
+        if submitted:
+            new_fig = plot.update(fig, x_lim=x_range, y_lim=y_range, title=plot_title,
+                                x_title=x_axis_title, y_title=y_axis_title,
+                                quad1_title=quadrant1_title, quad2_title=quadrant2_title,
+                                quad3_title=quadrant3_title, quad4_title=quadrant4_title,
+                                x_offsets=trace_update[:,0].astype(float), y_offsets=trace_update[:,1].astype(float))
+            return new_fig
     
     return fig
 
