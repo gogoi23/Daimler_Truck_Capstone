@@ -37,13 +37,12 @@ def plot(data, x_lim=None, y_lim=None, title=None,
         data = data.values
     data = np.array(data)
     
-    X = data[0]
-    Y = data[1:]
     fig = go.Figure()
+    num_lines = data.shape[0] / 2
     #adding each line to the plot
-    for i, y_ax in enumerate(Y):
+    for i in range(num_lines):
         fig.add_trace(
-            go.Scatter(x=X, y=y_ax, mode='lines',
+            go.Scatter(x=data[2*i], y=data[2*i + 1], mode='lines',
                        name=legends[i] if legends is not None else str(i))
         )
         
@@ -63,7 +62,8 @@ def plot(data, x_lim=None, y_lim=None, title=None,
 #updates figure with many different options
 def update(fig, title=None, x_lim=None, y_lim=None, x_title=None, y_title=None,
            quad1_title=None, quad2_title=None, quad3_title=None, quad4_title=None,
-           x_offsets=[], y_offsets=[],  x_gridlines=True, y_gridlines=True):
+           x_offsets=[], y_offsets=[], x_gridlines=True, y_gridlines=True,
+           legends=[]):
     
     fig.update_layout(
         title=title,
@@ -98,9 +98,10 @@ def update(fig, title=None, x_lim=None, y_lim=None, x_title=None, y_title=None,
         x=1-margin, y=margin,showarrow=False
     )
     
-    for trace, x_off, y_off in zip(fig.data, x_offsets, y_offsets):
+    for trace, x_off, y_off, name in zip(fig.data, x_offsets, y_offsets, legends):
         trace['x'] = np.add(trace['x'], x_off)
         trace['y'] = np.add(trace['y'], y_off)
+        trace['name'] = name
         
     return fig
 

@@ -103,6 +103,7 @@ def create_graph_df(d, x, y):
     y_df = d.query('test == @selected_graph and dataset == @y')
     return pd.concat([x_df, y_df])
 
+#creates widget/options to offset a given trace/line and change its name in the legends
 def adjust_trace(label, container):
     col1, col2, col3 = container.columns(3)
     x_off = col1.number_input(label + ' x-offset', value=0.0)
@@ -114,15 +115,16 @@ def customize_plot(fig):
     expander = st.expander('Adjust chart')
     with expander.form(key='update_plot'):
         #getting current axes ranges of the plot
-        x_min = float(np.min(fig.data[0]['x']))
-        x_max = float(np.max(fig.data[0]['x']))
-        y_mins = []
-        y_maxs = []
+        x_mins, x_maxs, y_mins, y_maxs = [], [], [], []
         legends = []
         for trace in fig.data:
+            x_mins = np.append(x_mins, np.min(trace['x']))
+            x_maxs = np.append(x_maxs, np.max(trace['x']))
             y_mins = np.append(y_mins, np.min(trace['y']))
             y_maxs = np.append(y_maxs, np.max(trace['y']))
-            legends = np.append(legends, trace['name'] if 'name' in trace else None)
+            legends = np.append(legends, trace['name'] if 'name' in trace else '')
+        x_min = float(np.min(x_mins))
+        x_max = float(np.max(x_maxs))
         y_min = float(np.min(y_mins))
         y_max = float(np.max(y_maxs))
         
@@ -133,7 +135,7 @@ def customize_plot(fig):
         x_axis_title = col1.text_input('X-axis title', key='x_axis_title')
         y_axis_title = col2.text_input('Y-axis title', key='y_axis_title')
         
-        #options to adjust x,y axes bounds
+        #options to adjust x-axis bounds
         col1_1, col1_2, col2_1, col2_2 = st.columns(4)
         x_axis_lower = col1_1.number_input('X-axis range', value=x_min, step=0.0001,
                                         format='%.4f', key='x_axis_lower')
@@ -141,6 +143,7 @@ def customize_plot(fig):
                                         format='%.4f', key='x_axis_upper', label_visibility='hidden')
         if x_axis_upper < x_axis_lower:
             col1.error('Invalid range', icon="🚨")
+        #options to adjust y-axis bounds
         y_axis_lower = col2_1.number_input('Y-axis range', value=y_min, step=0.0001, 
                                         format='%.4f', key='y_axis_lower')
         y_axis_upper = col2_2.number_input('Y-axis upper bound', value=y_max, step=0.0001, 
@@ -150,6 +153,7 @@ def customize_plot(fig):
         x_range = [x_axis_lower, x_axis_upper]
         y_range = [y_axis_lower, y_axis_upper]
         
+        #options to adjust offsets of each trace/lines
         trace_update = np.array(list(map(partial(adjust_trace, container=st), legends)))
 
         #options to add flags to the four quadrants
@@ -166,7 +170,8 @@ def customize_plot(fig):
                                 x_title=x_axis_title, y_title=y_axis_title,
                                 quad1_title=quadrant1_title, quad2_title=quadrant2_title,
                                 quad3_title=quadrant3_title, quad4_title=quadrant4_title,
-                                x_offsets=trace_update[:,0].astype(float), y_offsets=trace_update[:,1].astype(float))
+                                x_offsets=trace_update[:,0].astype(float), y_offsets=trace_update[:,1].astype(float),
+                                legends=trace_update[:,2])
             return new_fig
     
     return fig
