@@ -137,7 +137,7 @@ def adjust_trace(label, container):
     col1, col2, col3 = container.columns(3)
     x_off = col1.number_input(label + ' x-offset', value=0.0)
     y_off = col2.number_input(label + ' y-offset', value=0.0)
-    legend_name = col3.text_input(label + ' name in legends')
+    legend_name = col3.text_input(label + ' name in legends', value=label)
     return x_off, y_off, legend_name
 
 def customize_plot(fig):
@@ -170,15 +170,11 @@ def customize_plot(fig):
                                         format='%.4f', key='x_axis_lower')
         x_axis_upper = col1_2.number_input('X-axis upper bound', value=x_max, step=0.0001, 
                                         format='%.4f', key='x_axis_upper', label_visibility='hidden')
-        if x_axis_upper < x_axis_lower:
-            col1.error('Invalid range', icon="🚨")
         #options to adjust y-axis bounds
         y_axis_lower = col2_1.number_input('Y-axis range', value=y_min, step=0.0001, 
                                         format='%.4f', key='y_axis_lower')
         y_axis_upper = col2_2.number_input('Y-axis upper bound', value=y_max, step=0.0001, 
                                         format='%.4f', key='y_axis_upper', label_visibility='hidden')
-        if y_axis_upper < y_axis_lower:
-            col2.error('Invalid range', icon="🚨")
         x_range = [x_axis_lower, x_axis_upper]
         y_range = [y_axis_lower, y_axis_upper]
         
@@ -191,6 +187,17 @@ def customize_plot(fig):
         quadrant2_title = col2.text_input('Quadrant II', key='quadrant2_title')
         quadrant3_title = col3.text_input('Quadrant III', key='quadrant3_title')
         quadrant4_title = col4.text_input('Quadrant IV', key='quadrant4_title')
+        #options to define placement of quadrant titles
+        q_coord_cols = st.columns(8)
+        q1_coords, q2_coords, q3_coords, q4_coords = [0.925,0.925], [0.075,0.925], [0.075,0.075], [0.925,0.075]
+        q1_coords[0] = q_coord_cols[0].number_input('q1x', min_value=0.5, max_value=1.0, value=q1_coords[0], key='quad1_x', format='%.3f')
+        q1_coords[1] = q_coord_cols[1].number_input('q1y', min_value=0.5, max_value=1.0, value=q1_coords[1], key='quad1_y', format='%.3f')
+        q2_coords[0] = q_coord_cols[2].number_input('q2x', min_value=0.0, max_value=0.5, value=q2_coords[0], key='quad2_x', format='%.3f')
+        q2_coords[1] = q_coord_cols[3].number_input('q2y', min_value=0.5, max_value=1.0, value=q2_coords[1], key='quad2_y', format='%.3f')
+        q3_coords[0] = q_coord_cols[4].number_input('q3x', min_value=0.0, max_value=0.5, value=q3_coords[0], key='quad3_x', format='%.3f')
+        q3_coords[1] = q_coord_cols[5].number_input('q3y', min_value=0.0, max_value=0.5, value=q3_coords[1], key='quad3_y', format='%.3f')
+        q4_coords[0] = q_coord_cols[6].number_input('q4x', min_value=0.5, max_value=1.0, value=q4_coords[0], key='quad4_x', format='%.3f')
+        q4_coords[1] = q_coord_cols[7].number_input('q4y', min_value=0.0, max_value=0.5, value=q4_coords[1], key='quad4_y', format='%.3f')
             
         submitted = st.form_submit_button('Update chart')
         expander.button('Reset chart', key='reset_chart_button')
@@ -199,6 +206,8 @@ def customize_plot(fig):
                                 x_title=x_axis_title, y_title=y_axis_title,
                                 quad1_title=quadrant1_title, quad2_title=quadrant2_title,
                                 quad3_title=quadrant3_title, quad4_title=quadrant4_title,
+                                quad1_coords=q1_coords, quad2_coords=q2_coords,
+                                quad3_coords=q3_coords, quad4_coords=q4_coords,
                                 x_offsets=trace_update[:,0].astype(float), y_offsets=trace_update[:,1].astype(float),
                                 legends=trace_update[:,2])
             return new_fig
