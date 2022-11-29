@@ -181,9 +181,28 @@ def customize_plot(fig):
             col2.error('Invalid range', icon="🚨")
         x_range = [x_axis_lower, x_axis_upper]
         y_range = [y_axis_lower, y_axis_upper]
-        
+
         #options to adjust offsets of each trace/lines
         trace_update = np.array(list(map(partial(adjust_trace, container=st), legends)))
+
+        #create color picker widgets to adjust color of lines
+        col1, col2, col3, col4, col5 = st.columns(5)
+        color_select_1 = col1.empty()
+        color_1 = color_select_1.color_picker("0 Color",key='1',value='#636EFA')
+        color_select_2 = col2.empty()
+        color_2 = color_select_2.color_picker("1 Line Color",key='2',value='#EF553B')
+        color_select_3 = col3.empty()
+        color_3 = color_select_3.color_picker("2 Line Color",key='3',value='#00CC96')
+        color_select_4 = col4.empty()
+        color_4 = color_select_4.color_picker("3 Line Color",key='4',value='#AB63FA')
+        color_select_5 = col5.empty()
+        color_5 = color_select_5.color_picker("4 Line Color",key='5',value='#FFA15A')
+        
+        color_selectors = [color_select_1,color_select_2,color_select_3,color_select_4,color_select_5]
+        colors = [color_1,color_2,color_3,color_4,color_5]
+
+        for i in range(legends.size,5):
+            color_selectors[i].empty()
 
         #options to add flags to the four quadrants
         col1, col2, col3, col4 = st.columns(4)
@@ -191,6 +210,7 @@ def customize_plot(fig):
         quadrant2_title = col2.text_input('Quadrant II', key='quadrant2_title')
         quadrant3_title = col3.text_input('Quadrant III', key='quadrant3_title')
         quadrant4_title = col4.text_input('Quadrant IV', key='quadrant4_title')
+        
             
         submitted = st.form_submit_button('Update chart')
         expander.button('Reset chart', key='reset_chart_button')
@@ -200,7 +220,7 @@ def customize_plot(fig):
                                 quad1_title=quadrant1_title, quad2_title=quadrant2_title,
                                 quad3_title=quadrant3_title, quad4_title=quadrant4_title,
                                 x_offsets=trace_update[:,0].astype(float), y_offsets=trace_update[:,1].astype(float),
-                                legends=trace_update[:,2])
+                                legends=trace_update[:,2],colors=colors)
             return new_fig
     
     return fig
