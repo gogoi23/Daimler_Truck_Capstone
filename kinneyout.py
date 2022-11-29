@@ -137,7 +137,7 @@ def adjust_trace(label, container):
     col1, col2, col3 = container.columns(3)
     x_off = col1.number_input(label + ' x-offset', value=0.0)
     y_off = col2.number_input(label + ' y-offset', value=0.0)
-    legend_name = col3.text_input(label + ' name in legends', value=label)
+    legend_name = col3.text_input('"' + label + '"' + ' name in legends', value=label)
     return x_off, y_off, legend_name
 
 def customize_plot(fig):
@@ -157,12 +157,12 @@ def customize_plot(fig):
         y_min = float(np.min(y_mins))
         y_max = float(np.max(y_maxs))
         
-        plot_title = st.text_input('Chart title', placeholder='ex. Bump Steer', key='plot_title')
+        plot_title = st.text_input('Chart title', key='plot_title', value=fig.layout.title.text)
         
         col1, col2 = st.columns(2, gap='small')
         #options to adjust x,y axes title
-        x_axis_title = col1.text_input('X-axis title', key='x_axis_title')
-        y_axis_title = col2.text_input('Y-axis title', key='y_axis_title')
+        x_axis_title = col1.text_input('X-axis title', key='x_axis_title', value=fig.layout.xaxis.title.text)
+        y_axis_title = col2.text_input('Y-axis title', key='y_axis_title', value=fig.layout.yaxis.title.text)
         
         #options to adjust x-axis bounds
         col1_1, col1_2, col2_1, col2_2 = st.columns(4)
@@ -183,10 +183,10 @@ def customize_plot(fig):
 
         #options to add flags to the four quadrants
         col1, col2, col3, col4 = st.columns(4)
-        quadrant1_title = col1.text_input('Quadrant I', key='quadrant1_title')
-        quadrant2_title = col2.text_input('Quadrant II', key='quadrant2_title')
-        quadrant3_title = col3.text_input('Quadrant III', key='quadrant3_title')
-        quadrant4_title = col4.text_input('Quadrant IV', key='quadrant4_title')
+        quadrant1_title = col1.text_input('Quadrant I', key='quadrant1_title', value=fig.layout.annotations[0].text)
+        quadrant2_title = col2.text_input('Quadrant II', key='quadrant2_title', value=fig.layout.annotations[1].text)
+        quadrant3_title = col3.text_input('Quadrant III', key='quadrant3_title', value=fig.layout.annotations[2].text)
+        quadrant4_title = col4.text_input('Quadrant IV', key='quadrant4_title', value=fig.layout.annotations[3].text)
         #options to define placement of quadrant titles
         q_coord_cols = st.columns(8)
         q1_coords, q2_coords, q3_coords, q4_coords = [0.925,0.925], [0.075,0.925], [0.075,0.075], [0.925,0.075]
@@ -348,10 +348,18 @@ if len(uploaded_files) != 0:
         st.write("template")
     #make plot using user-selected rows of data. 
     if st.session_state.graph_df.empty == False:
-        data_plot = plot.plot(st.session_state.graph_df)
+        indices = np.array(st.session_state.graph_df.index)
+        index_legends = []
+        for tup in indices[np.arange(1, len(indices),2)]:
+            index_legends = np.append(index_legends, tup[2])
+        print('a new start')
+        print(index_legends)
+        data_plot = plot.plot(st.session_state.graph_df, legends=index_legends, 
+                              x_title=(indices[0])[2], y_title=(indices[1])[2],
+                              title=(indices[1])[2]+' vs '+(indices[0])[2])
         new_data_plot = customize_plot(data_plot)
         st.plotly_chart(new_data_plot, use_container_width=True)
-        st.write(st.session_state.graph_df) 
+        st.write(st.session_state.graph_df)
     
     #st.write(st.session_state.df)
     #st.write(all_axis_df)  
