@@ -132,7 +132,7 @@ def convert_df(df):
     # IMPORTANT: Cache the conversion to prevent computation on every rerun
     return df.to_csv().encode('utf-8')
 
-#creates widget/options to offset a given trace/line and change its name in the legends
+#creates widget/options to offset a given trace/line
 def adjust_trace(label, container):
     col1, col2 = container.columns(2)
     x_off = col1.number_input(label + ' x-offset', value=0.0)
@@ -175,33 +175,19 @@ def customize_plot(fig):
 
         #options to add flags to the four quadrants
         col1, col2, col3, col4 = st.columns(4)
-        quadrant1_title = col1.text_input('Quadrant I', key='quadrant1_title', value=fig.layout.annotations[0].text)
-        quadrant2_title = col2.text_input('Quadrant II', key='quadrant2_title', value=fig.layout.annotations[1].text)
-        quadrant3_title = col3.text_input('Quadrant III', key='quadrant3_title', value=fig.layout.annotations[2].text)
-        quadrant4_title = col4.text_input('Quadrant IV', key='quadrant4_title', value=fig.layout.annotations[3].text)
-        #options to define placement of quadrant titles
-        q_coord_cols = st.columns(8)
-        q1_coords, q2_coords, q3_coords, q4_coords = [0.925,0.925], [0.075,0.925], [0.075,0.075], [0.925,0.075]
-        q1_coords[0] = q_coord_cols[0].number_input('q1x', min_value=0.5, max_value=1.0, value=q1_coords[0], key='quad1_x', format='%.3f')
-        q1_coords[1] = q_coord_cols[1].number_input('q1y', min_value=0.5, max_value=1.0, value=q1_coords[1], key='quad1_y', format='%.3f')
-        q2_coords[0] = q_coord_cols[2].number_input('q2x', min_value=0.0, max_value=0.5, value=q2_coords[0], key='quad2_x', format='%.3f')
-        q2_coords[1] = q_coord_cols[3].number_input('q2y', min_value=0.5, max_value=1.0, value=q2_coords[1], key='quad2_y', format='%.3f')
-        q3_coords[0] = q_coord_cols[4].number_input('q3x', min_value=0.0, max_value=0.5, value=q3_coords[0], key='quad3_x', format='%.3f')
-        q3_coords[1] = q_coord_cols[5].number_input('q3y', min_value=0.0, max_value=0.5, value=q3_coords[1], key='quad3_y', format='%.3f')
-        q4_coords[0] = q_coord_cols[6].number_input('q4x', min_value=0.5, max_value=1.0, value=q4_coords[0], key='quad4_x', format='%.3f')
-        q4_coords[1] = q_coord_cols[7].number_input('q4y', min_value=0.0, max_value=0.5, value=q4_coords[1], key='quad4_y', format='%.3f')
-            
+        quadrant1_show = col1.checkbox('Show Quadrant I flag', key='quadrant1_show')
+        quadrant2_show = col2.checkbox('Show Quadrant II flag', key='quadrant2_show')
+        quadrant3_show = col3.checkbox('Show Quadrant III flag', key='quadrant3_show')
+        quadrant4_show = col4.checkbox('Show Quadrant IV flag', key='quadrant4_show')
+        
         submitted = st.form_submit_button('Update chart')
         expander.button('Reset chart', key='reset_chart_button')
         if submitted:
-            new_fig = plot.update(fig, x_lim=x_range, y_lim=y_range, title=plot_title,
-                                x_title=x_axis_title, y_title=y_axis_title,
-                                quad1_title=quadrant1_title, quad2_title=quadrant2_title,
-                                quad3_title=quadrant3_title, quad4_title=quadrant4_title,
-                                quad1_coords=q1_coords, quad2_coords=q2_coords,
-                                quad3_coords=q3_coords, quad4_coords=q4_coords,
+            new_fig = plot.update(fig, x_lim=x_range, y_lim=y_range,
+                                quad1_show=quadrant1_show, quad2_show=quadrant2_show,
+                                quad3_show=quadrant3_show, quad4_show=quadrant4_show,
                                 x_offsets=trace_update[:,0].astype(float), y_offsets=trace_update[:,1].astype(float),
-                                legends=trace_update[:,2])
+                                )
             return new_fig
     
     return fig
@@ -348,9 +334,15 @@ if len(uploaded_files) != 0:
                               x_title=(indices[0])[2], y_title=(indices[1])[2],
                               title=(indices[1])[2]+' vs '+(indices[0])[2])
         new_data_plot = customize_plot(data_plot)
+        
         config = dict({'scrollZoom': True,
                    'displayModeBar': True,
-                   'editable': True})
+                   'editable': True,
+                   'showLink': True,
+                   #'showEditInChartStudio': True,
+                   'plotlyServerURL': "https://chart-studio.plotly.com",
+                   'linkText': 'Rigorous customization'})
+        
         st.plotly_chart(new_data_plot, use_container_width=True, config=config)
         st.write(st.session_state.graph_df)
     

@@ -59,65 +59,56 @@ def plot(data, x_lim=None, y_lim=None, title=None,
     
     margins = 0.075
     fig.add_annotation(
-        text=quad1_title,
+        text=quad1_title if quad1_title else 'Click to enter Quadrant I flag',
         xref='paper', yref='paper',
-        x=1-margins, y=1-margins, showarrow=False
+        x=1-margins, y=1-margins, showarrow=False,
+        opacity=1 if quad1_title else 0
     )
     fig.add_annotation(
-        text=quad2_title,
+        text=quad2_title if quad2_title else 'Click to enter Quadrant II flag',
         xref='paper', yref='paper',
-        x=margins, y=1-margins, showarrow=False
+        x=margins, y=1-margins, showarrow=False,
+        opacity=1 if quad2_title else 0
     )
     fig.add_annotation(
-        text=quad3_title,
+        text=quad3_title if quad3_title else 'Click to enter Quadrant III flag',
         xref='paper', yref='paper',
-        x=margins, y=margins, showarrow=False
+        x=margins, y=margins, showarrow=False,
+        opacity=1 if quad3_title else 0
     )
     fig.add_annotation(
-        text=quad4_title,
+        text=quad4_title if quad4_title else 'Click to enter Quadrant IV flag',
         xref='paper', yref='paper',
-        x=1-margins, y=margins, showarrow=False
+        x=1-margins, y=margins, showarrow=False,
+        opacity=1 if quad4_title else 0
     )
     
     #fig.show()
     return fig
 
 #updates figure with many different options
-def update(fig, title=None, x_lim=None, y_lim=None, x_title=None, y_title=None,
-           quad1_title=None, quad2_title=None, quad3_title=None, quad4_title=None,
-           quad1_coords=[], quad2_coords=[], quad3_coords=[], quad4_coords=[],
-           x_offsets=[], y_offsets=[], x_gridlines=True, y_gridlines=True,
-           legends=[]):
+def update(fig, x_lim=None, y_lim=None, 
+           quad1_show=False, quad2_show=False, quad3_show=False, quad4_show=False,
+           x_offsets=None, y_offsets=None, x_gridlines=True, y_gridlines=True):
     
     fig.update_layout(
-        title=title,
-        xaxis=dict(title=x_title,
-                   range=x_lim,
+        #title=dict(x=0.5, y=0.9),
+        xaxis=dict(range=x_lim,
                    showgrid=x_gridlines),
-        yaxis=dict(title=y_title,
-                   range=y_lim,
+        yaxis=dict(range=y_lim,
                    showgrid=y_gridlines),
         annotations=[
-            dict(text=quad1_title,
-                 xref='paper', yref='paper',
-                 x=quad1_coords[0], y=quad1_coords[1], showarrow=False),
-            dict(text=quad2_title,
-                 xref='paper', yref='paper',
-                 x=quad2_coords[0], y=quad2_coords[1], showarrow=False),
-            dict(text=quad3_title,
-                 xref='paper', yref='paper',
-                 x=quad3_coords[0], y=quad3_coords[1], showarrow=False),
-            dict(text=quad4_title,
-                 xref='paper', yref='paper',
-                 x=quad4_coords[0], y=quad4_coords[1], showarrow=False)
+            dict(opacity=1 if quad1_show else 0),
+            dict(opacity=1 if quad2_show else 0),
+            dict(opacity=1 if quad3_show else 0),
+            dict(opacity=1 if quad4_show else 0)
         ]
         #,legend_title=""
     )
     
-    for trace, x_off, y_off, name in zip(fig.data, x_offsets, y_offsets, legends):
+    for trace, x_off, y_off in zip(fig.data, x_offsets, y_offsets):
         trace['x'] = np.add(trace['x'], x_off)
         trace['y'] = np.add(trace['y'], y_off)
-        trace['name'] = name
     return fig
 
 #for testing purposes
