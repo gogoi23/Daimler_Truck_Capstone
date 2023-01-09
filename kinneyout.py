@@ -134,11 +134,10 @@ def convert_df(df):
 
 #creates widget/options to offset a given trace/line and change its name in the legends
 def adjust_trace(label, container):
-    col1, col2, col3 = container.columns(3)
+    col1, col2 = container.columns(2)
     x_off = col1.number_input(label + ' x-offset', value=0.0)
     y_off = col2.number_input(label + ' y-offset', value=0.0)
-    legend_name = col3.text_input('"' + label + '"' + ' name in legends', value=label)
-    return x_off, y_off, legend_name
+    return x_off, y_off
 
 def customize_plot(fig):
     expander = st.expander('Adjust chart')
@@ -156,13 +155,6 @@ def customize_plot(fig):
         x_max = float(np.max(x_maxs))
         y_min = float(np.min(y_mins))
         y_max = float(np.max(y_maxs))
-        
-        plot_title = st.text_input('Chart title', key='plot_title', value=fig.layout.title.text)
-        
-        col1, col2 = st.columns(2, gap='small')
-        #options to adjust x,y axes title
-        x_axis_title = col1.text_input('X-axis title', key='x_axis_title', value=fig.layout.xaxis.title.text)
-        y_axis_title = col2.text_input('Y-axis title', key='y_axis_title', value=fig.layout.yaxis.title.text)
         
         #options to adjust x-axis bounds
         col1_1, col1_2, col2_1, col2_2 = st.columns(4)
@@ -352,13 +344,14 @@ if len(uploaded_files) != 0:
         index_legends = []
         for tup in indices[np.arange(1, len(indices),2)]:
             index_legends = np.append(index_legends, tup[2])
-        print('a new start')
-        print(index_legends)
         data_plot = plot.plot(st.session_state.graph_df, legends=index_legends, 
                               x_title=(indices[0])[2], y_title=(indices[1])[2],
                               title=(indices[1])[2]+' vs '+(indices[0])[2])
         new_data_plot = customize_plot(data_plot)
-        st.plotly_chart(new_data_plot, use_container_width=True)
+        config = dict({'scrollZoom': True,
+                   'displayModeBar': True,
+                   'editable': True})
+        st.plotly_chart(new_data_plot, use_container_width=True, config=config)
         st.write(st.session_state.graph_df)
     
     #st.write(st.session_state.df)
