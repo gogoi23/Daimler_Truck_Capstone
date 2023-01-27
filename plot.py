@@ -77,6 +77,7 @@ def plot(data, x_lim=None, y_lim=None, title=None,
     #fig.show()
     return fig
 
+
 """
 Update figure with with new customization if provided. 
 Capable of adjusting:
@@ -87,6 +88,7 @@ Capable of adjusting:
 def update(fig, x_lim=None, y_lim=None, 
            quad1_show=False, quad2_show=False, quad3_show=False, quad4_show=False,
            x_offsets=None, y_offsets=None, x_gridlines=True, y_gridlines=True):
+
     
     fig.update_layout(
         #title=dict(x=0.5, y=0.9),
@@ -116,8 +118,55 @@ def update(fig, x_lim=None, y_lim=None,
         trace['y'] = np.add(trace['y'], y_off)
     return fig
 
+#updates figure with many different options
+def update(fig, title=None, x_lim=None, y_lim=None, x_title=None, y_title=None,
+           quad1_title=None, quad2_title=None, quad3_title=None, quad4_title=None,
+           x_offset=0, y_offset=0, x_gridlines=True, y_gridlines=True):
+    
+    fig.update_layout(
+        title=title,
+        xaxis=dict(title=x_title,
+                   range=x_lim,
+                   showgrid=x_gridlines),
+        yaxis=dict(title=y_title,
+                   range=y_lim,
+                   showgrid=y_gridlines)
+        #,legend_title=""
+    )
+    
+    margin = 0.075
+    fig.add_annotation(
+        text=quad1_title,
+        xref='paper', yref='paper',
+        x=1-margin, y=1-margin,showarrow=False
+    )
+    fig.add_annotation(
+        text=quad2_title,
+        xref='paper', yref='paper',
+        x=margin, y=1-margin,showarrow=False
+    )
+    fig.add_annotation(
+        text=quad3_title,
+        xref='paper', yref='paper',
+        x=margin, y=margin,showarrow=False
+    )
+    fig.add_annotation(
+        text=quad4_title,
+        xref='paper', yref='paper',
+        x=1-margin, y=margin,showarrow=False
+    )
+    
+    for trace in fig.data:
+        
+        trace['x'] = np.add(trace['x'], x_offset)
+        trace['y'] = np.add(trace['y'], y_offset)
+        
+    return fig
+
 #for testing purposes
 if __name__ == '__main__':
     data = pd.read_csv('.\Kinney_Exchange\Dummy Folder with FA1 results\output\sub_fa__hk_typ1__200415__P4_12p5k_ZZ1513_P__201003__01p00___sub_suspension_kinematics__210528__artic.csv')
+
     #fig = plot(data.iloc[:,1:], legends=data.iloc[:,0])
+
     #plot_px(data, index_as_legends=True)
