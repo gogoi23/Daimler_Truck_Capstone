@@ -65,8 +65,11 @@ def math(df, v, lc, x, y, dataset_math):
 
 #get second index based on df and keyword passed in paramenter, return list
 def get_load_case(d, v):
-    vehicle = [ x for x in d.index.tolist() if x[0] == v ]
-    test_load = [ x[1] for x in vehicle ]
+    if v is None:
+        test_load = [ x[1] for x in d.index.tolist() ]
+    else :
+        vehicle = [ x for x in d.index.tolist() if x[0] == v ]
+        test_load = [ x[1] for x in vehicle ]
 
     return test_load
 
@@ -125,7 +128,7 @@ def check_graph_lc(aad, s, gcv):
     if st.session_state.graph_df.empty:
         st.session_state.load_case = [*set(get_load_case(aad, gcv))]
     else:
-        st.session_state.load_case = [*set(get_load_case(s, gcv))]
+        st.session_state.load_case = [*set(get_load_case(s, None))]
 
 @st.cache
 def convert_df(df):
@@ -252,6 +255,8 @@ if len(uploaded_files) != 0:
 
     graph_tab, dataset_tab, standard_plot_tab = st.sidebar.tabs(["Graph", "Dataset Manipulation", "Standard Plot"])
     
+    #TO DO: CHECK FOR MAX OF 5 GRAPHS
+
     with graph_tab:
         graph_selected_vehicle = st.selectbox("Select a vehicle", vehicle_list, key="graph_vehicle_select")
         if 'load_case' not in st.session_state:
@@ -325,7 +330,6 @@ if len(uploaded_files) != 0:
                 st.experimental_rerun()
     with standard_plot_tab:
         st.write("template")
-        
     #make plot using user-selected rows of data. 
     if st.session_state.graph_df.empty == False:
         indices = np.array(st.session_state.graph_df.index)
@@ -336,6 +340,7 @@ if len(uploaded_files) != 0:
         data_plot = plot.plot(st.session_state.graph_df, legends=index_legends, 
                               x_title=(indices[0])[2], y_title=(indices[1])[2],
                               title=(indices[1])[2]+' vs '+(indices[0])[2])
+
         new_data_plot = customize_plot(data_plot)
         
         #Plotly chart configurations
