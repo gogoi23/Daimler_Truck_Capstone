@@ -133,12 +133,13 @@ def convert_df(df):
     return df.to_csv().encode('utf-8')
 
 #creates widget/options to offset a given trace/line
-def adjust_trace(label, container):
+def adjust_trace(label, idx, container):
     col1, col2 = container.columns(2)
-    x_off = col1.number_input(label + ' x-offset', value=0.0)
-    y_off = col2.number_input(label + ' y-offset', value=0.0)
+    x_off = col1.number_input(label + ' x-offset', value=0.0, key=f'{label}{idx}_x-off')
+    y_off = col2.number_input(label + ' y-offset', value=0.0, key=f'{label}{idx}_y-off')
     return x_off, y_off
 
+#creates region of the page with all the widgets to customize/adjust the plot
 def customize_plot(fig):
     expander = st.expander('Adjust chart')
     with expander.form(key='update_plot'):
@@ -171,7 +172,7 @@ def customize_plot(fig):
         y_range = [y_axis_lower, y_axis_upper]
         
         #options to adjust offsets of each trace/lines
-        trace_update = np.array(list(map(partial(adjust_trace, container=st), legends)))
+        trace_update = np.array(list(map(partial(adjust_trace, container=st), legends, np.arange(len(legends)))))
 
         #options to add flags to the four quadrants
         col1, col2, col3, col4 = st.columns(4)
@@ -324,26 +325,25 @@ if len(uploaded_files) != 0:
                 st.experimental_rerun()
     with standard_plot_tab:
         st.write("template")
+        
     #make plot using user-selected rows of data. 
     if st.session_state.graph_df.empty == False:
         indices = np.array(st.session_state.graph_df.index)
         index_legends = []
         for tup in indices[np.arange(1, len(indices),2)]:
             index_legends = np.append(index_legends, tup[2])
+            
         data_plot = plot.plot(st.session_state.graph_df, legends=index_legends, 
                               x_title=(indices[0])[2], y_title=(indices[1])[2],
                               title=(indices[1])[2]+' vs '+(indices[0])[2])
         new_data_plot = customize_plot(data_plot)
         
+        #Plotly chart configurations
         config = dict({'scrollZoom': True,
                    'displayModeBar': True,
-                   'editable': True,
-                   'showLink': True,
-                   #'showEditInChartStudio': True,
-                   'plotlyServerURL': "https://chart-studio.plotly.com",
-                   'linkText': 'Rigorous customization'})
+                   'editable': True})
         
-        st.plotly_chart(new_data_plot, use_container_width=True, config=config)
+        st.plotly_chart(new_data_plot, use_container_width=False, config=config)
         st.write(st.session_state.graph_df)
     
     #st.write(st.session_state.df)
