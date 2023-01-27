@@ -8,11 +8,11 @@ import pandas as pd
 import numpy as np
 from requests import session
 import streamlit as st
+
 import datetime
+
 import plot
 import csv
-
-
 
 # initial page config
 st.set_page_config(
@@ -85,6 +85,7 @@ def parse_filename(name):
 
     return {"mt": model_template, "tv": test_variant, "tb": test_bench, "lc": test_load_case}
 
+
 #this returns a numpy array of two lists added together 
 def math(df, v, lc, x, y, dataset_math):
     x_row = df.query('vehicle == @v and test_load == @lc and dataset == @x')
@@ -103,14 +104,16 @@ def math(df, v, lc, x, y, dataset_math):
         return_value = np.divide(axis1, axis2)
     elif (dataset_math == "Average"):
         return_value1 = np.add(axis1, axis2) 
-        #print(return_value1[1])
         return_value = return_value1/2
     return return_value
 
 #get second index based on df and keyword passed in paramenter, return list
 def get_load_case(d, v):
-    vehicle = [ x for x in d.index.tolist() if x[0] == v ]
-    test_load = [ x[1] for x in vehicle ]
+    if v is None:
+        test_load = [ x[1] for x in d.index.tolist() ]
+    else :
+        vehicle = [ x for x in d.index.tolist() if x[0] == v ]
+        test_load = [ x[1] for x in vehicle ]
 
     return test_load
 
@@ -169,77 +172,76 @@ def check_graph_lc(aad, s, gcv):
     if st.session_state.graph_df.empty:
         st.session_state.load_case = [*set(get_load_case(aad, gcv))]
     else:
-        st.session_state.load_case = [*set(get_load_case(s, gcv))]
+        st.session_state.load_case = [*set(get_load_case(s, None))]
 
 @st.cache
 def convert_df(df):
     # IMPORTANT: Cache the conversion to prevent computation on every rerun
     return df.to_csv().encode('utf-8')
 
+#creates widget/options to offset a given trace/line
+def adjust_trace(label, idx, container):
+    col1, col2 = container.columns(2)
+    x_off = col1.number_input(label + ' x-offset', value=0.0, key=f'{label}{idx}_x-off')
+    y_off = col2.number_input(label + ' y-offset', value=0.0, key=f'{label}{idx}_y-off')
+    return x_off, y_off
+
+#creates region of the page with all the widgets to customize/adjust the plot
 def customize_plot(fig):
     expander = st.expander('Adjust chart')
-    form = expander.form(key='update_plot')
-    
-    #getting current axes ranges of the plot
-    x_min = float(np.min(fig.data[0]['x']))
-    x_max = float(np.max(fig.data[0]['x']))
-    y_mins = []
-    y_maxs = []
-    for trace in fig.data:
-        y_mins = np.append(y_mins, np.min(trace['y']))
-        y_maxs = np.append(y_maxs, np.max(trace['y']))
-    y_min = float(np.min(y_mins))
-    y_max = float(np.max(y_maxs))
-    
-    plot_title = form.text_input('Chart title', placeholder='ex. Bump Steer', key='plot_title')
-    
-    col1, col2 = form.columns(2, gap='small')
-    #options to adjust x,y axes title
-    x_axis_title = col1.text_input('X-axis title', key='x_axis_title')
-    y_axis_title = col2.text_input('Y-axis title', key='y_axis_title')
-    
-    #options to adjust x,y axes bounds
-    # x_range = col1.slider('X-axis range', x_min, x_max, (x_min, x_max), key='x_axis_range')
-    # y_range = col2.slider('Y-axis range', y_min, y_max, (y_min, y_max), key='y_axis_range')
-    col1_1, col1_2, col2_1, col2_2 = form.columns(4)
-    x_axis_lower = col1_1.number_input('X-axis range', value=x_min, key='x_axis_lower')
-    x_axis_upper = col1_2.number_input('X-axis upper bound', value=x_max, key='x_axis_upper', label_visibility='hidden')
-    if x_axis_upper < x_axis_lower:
-        col1.error('Invalid range', icon="🚨")
-    y_axis_lower = col2_1.number_input('Y-axis range', value=y_min, key='y_axis_lower')
-    y_axis_upper = col2_2.number_input('Y-axis upper bound', value=y_max, key='y_axis_upper', label_visibility='hidden')
-    if y_axis_upper < y_axis_lower:
-        col2.error('Invalid range', icon="🚨")
-    col1, col2 = form.columns(2)
-    
-    #options to adjust x,y plot data
-    x_axis_offset = col1.number_input('X-axis offset', key='x_axis_offset')
-    y_axis_offset = col2.number_input('Y-axis offset', key='Y_axis_offset')
-    x_range = np.add([x_axis_lower, x_axis_upper], x_axis_offset)
-    y_range = np.add([y_axis_lower, y_axis_upper], y_axis_offset)
-
-    #options to add flags to the four quadrants
-    col1, col2, col3, col4 = form.columns(4)
-    quadrant1_title = col1.text_input('Quadrant I', key='quadrant1_title')
-    quadrant2_title = col2.text_input('Quadrant II', key='quadrant2_title')
-    quadrant3_title = col3.text_input('Quadrant III', key='quadrant3_title')
-    quadrant4_title = col4.text_input('Quadrant IV', key='quadrant4_title')
+    with expander.form(key='update_plot'):
+        #getting current axes ranges of the plot
+        x_mins, x_maxs, y_mins, y_maxs = [], [], [], []
+        legends = []
+        for trace in fig.data:
+            x_mins = np.append(x_mins, np.min(trace['x']))
+            x_maxs = np.append(x_maxs, np.max(trace['x']))
+            y_mins = np.append(y_mins, np.min(trace['y']))
+            y_maxs = np.append(y_maxs, np.max(trace['y']))
+            legends = np.append(legends, trace['name'] if 'name' in trace else '')
+        x_min = float(np.min(x_mins))
+        x_max = float(np.max(x_maxs))
+        y_min = float(np.min(y_mins))
+        y_max = float(np.max(y_maxs))
         
-    submitted = form.form_submit_button('Update chart')
-    reset = expander.button('Reset chart', key='reset_chart_button')
-    if submitted:
-        new_fig = plot.update(fig, x_lim=x_range, y_lim=y_range, title=plot_title,
-                              x_title=x_axis_title, y_title=y_axis_title,
-                              quad1_title=quadrant1_title, quad2_title=quadrant2_title,
-                              quad3_title=quadrant3_title, quad4_title=quadrant4_title,
-                              x_offset=x_axis_offset, y_offset=y_axis_offset)
-        return new_fig
-    
+        #options to adjust x-axis bounds
+        col1_1, col1_2, col2_1, col2_2 = st.columns(4)
+        x_axis_lower = col1_1.number_input('X-axis range', value=x_min, step=0.0001,
+                                        format='%.4f', key='x_axis_lower')
+        x_axis_upper = col1_2.number_input('X-axis upper bound', value=x_max, step=0.0001, 
+                                        format='%.4f', key='x_axis_upper', label_visibility='hidden')
+        #options to adjust y-axis bounds
+        y_axis_lower = col2_1.number_input('Y-axis range', value=y_min, step=0.0001, 
+                                        format='%.4f', key='y_axis_lower')
+        y_axis_upper = col2_2.number_input('Y-axis upper bound', value=y_max, step=0.0001, 
+                                        format='%.4f', key='y_axis_upper', label_visibility='hidden')
+        x_range = [x_axis_lower, x_axis_upper]
+        y_range = [y_axis_lower, y_axis_upper]
+        
+        #options to adjust offsets of each trace/lines
+        trace_update = np.array(list(map(partial(adjust_trace, container=st), legends, np.arange(len(legends)))))
+
+        #options to add flags to the four quadrants
+        col1, col2, col3, col4 = st.columns(4)
+        quadrant1_show = col1.checkbox('Show Quadrant I flag', key='quadrant1_show')
+        quadrant2_show = col2.checkbox('Show Quadrant II flag', key='quadrant2_show')
+        quadrant3_show = col3.checkbox('Show Quadrant III flag', key='quadrant3_show')
+        quadrant4_show = col4.checkbox('Show Quadrant IV flag', key='quadrant4_show')
+        
+        submitted = st.form_submit_button('Update chart')
+        expander.button('Reset chart', key='reset_chart_button')
+        if submitted:
+            new_fig = plot.update(fig, x_lim=x_range, y_lim=y_range,
+                                quad1_show=quadrant1_show, quad2_show=quadrant2_show,
+                                quad3_show=quadrant3_show, quad4_show=quadrant4_show,
+                                x_offsets=trace_update[:,0].astype(float), y_offsets=trace_update[:,1].astype(float),
+                                )
+            return new_fig
+
     return fig
 
 st.title("Welcome to the Kinney:Out Results Viewer")
 uploaded_files = st.file_uploader("Please select .csv files for data.", accept_multiple_files=True, type=['csv'])
-
 
 
 #create a df that is a concationation of all .csv files
@@ -293,11 +295,14 @@ if len(uploaded_files) != 0:
 
     if 'df' not in st.session_state:
         st.session_state.df = pd.DataFrame()
+
         
     all_axis_df = pd.concat([all_df, st.session_state.df])
 
     graph_tab, dataset_tab, standard_plot_tab = st.sidebar.tabs(["Graph", "Dataset Manipulation", "Standard Plot"])
     
+    #TO DO: CHECK FOR MAX OF 5 GRAPHS
+
     with graph_tab:
         graph_selected_vehicle = st.selectbox("Select a vehicle", vehicle_list, key="graph_vehicle_select")
         if 'load_case' not in st.session_state:
@@ -373,12 +378,25 @@ if len(uploaded_files) != 0:
         st.write("template")
     #make plot using user-selected rows of data. 
     if st.session_state.graph_df.empty == False:
-        data_plot = plot.plot(st.session_state.graph_df)
+        indices = np.array(st.session_state.graph_df.index)
+        index_legends = []
+        for tup in indices[np.arange(1, len(indices),2)]:
+            index_legends = np.append(index_legends, tup[2])
+            
+        data_plot = plot.plot(st.session_state.graph_df, legends=index_legends, 
+                              x_title=(indices[0])[2], y_title=(indices[1])[2],
+                              title=(indices[1])[2]+' vs '+(indices[0])[2])
+
         new_data_plot = customize_plot(data_plot)
-        st.plotly_chart(new_data_plot, use_container_width=True)
-        st.plotly_chart(new_data_plot, use_container_width=True)
-        st.write(st.session_state.graph_df) 
-       
+        
+        #Plotly chart configurations
+        config = dict({'scrollZoom': True,
+                   'displayModeBar': True,
+                   'editable': True})
+        
+        st.plotly_chart(new_data_plot, use_container_width=False, config=config)
+        st.write(st.session_state.graph_df)
+
     
     #st.write(st.session_state.df)
     #st.write(all_axis_df)  
@@ -393,6 +411,7 @@ if len(uploaded_files) != 0:
                 csv_name = "graph" + str(current_time.year) +"-" + str(current_time.month) + "-" + str(current_time.day)
         with col2:
             st.download_button(label="Download data as CSV", data=graph_csv, file_name=csv_name + ".csv", mime='text/csv')
+
 
     #This is the code for the event handling when user presses the button labeled standard plots. 
     if st.button("Standard Plots"):
@@ -524,4 +543,3 @@ if len(uploaded_files) != 0:
                     #this graphs the plot. 
                     st.plotly_chart(data_plot)
 
-        
