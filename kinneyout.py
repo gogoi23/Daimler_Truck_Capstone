@@ -135,14 +135,14 @@ def convert_df(df):
     # IMPORTANT: Cache the conversion to prevent computation on every rerun
     return df.to_csv().encode('utf-8')
 
-#creates widget/options to offset a given trace/line and change its name in the legends
-def adjust_trace(label, container):
-    col1, col2, col3 = container.columns(3)
-    x_off = col1.number_input(label + ' x-offset', value=0.0)
-    y_off = col2.number_input(label + ' y-offset', value=0.0)
-    legend_name = col3.text_input(label + ' name in legends')
-    return x_off, y_off, legend_name
+#creates widget/options to offset a given trace/line
+def adjust_trace(label, idx, container):
+    col1, col2 = container.columns(2)
+    x_off = col1.number_input(label + ' x-offset', value=0.0, key=f'{label}{idx}_x-off')
+    y_off = col2.number_input(label + ' y-offset', value=0.0, key=f'{label}{idx}_y-off')
+    return x_off, y_off
 
+#creates region of the page with all the widgets to customize/adjust the plot
 def customize_plot(fig):
     expander = st.expander('Adjust chart')
     with expander.form(key='update_plot'):
@@ -160,50 +160,38 @@ def customize_plot(fig):
         y_min = float(np.min(y_mins))
         y_max = float(np.max(y_maxs))
         
-        plot_title = st.text_input('Chart title', placeholder='ex. Bump Steer', key='plot_title')
-        
-        col1, col2 = st.columns(2, gap='small')
-        #options to adjust x,y axes title
-        x_axis_title = col1.text_input('X-axis title', key='x_axis_title')
-        y_axis_title = col2.text_input('Y-axis title', key='y_axis_title')
-        
         #options to adjust x-axis bounds
         col1_1, col1_2, col2_1, col2_2 = st.columns(4)
         x_axis_lower = col1_1.number_input('X-axis range', value=x_min, step=0.0001,
                                         format='%.4f', key='x_axis_lower')
         x_axis_upper = col1_2.number_input('X-axis upper bound', value=x_max, step=0.0001, 
                                         format='%.4f', key='x_axis_upper', label_visibility='hidden')
-        if x_axis_upper < x_axis_lower:
-            col1.error('Invalid range', icon="🚨")
         #options to adjust y-axis bounds
         y_axis_lower = col2_1.number_input('Y-axis range', value=y_min, step=0.0001, 
                                         format='%.4f', key='y_axis_lower')
         y_axis_upper = col2_2.number_input('Y-axis upper bound', value=y_max, step=0.0001, 
                                         format='%.4f', key='y_axis_upper', label_visibility='hidden')
-        if y_axis_upper < y_axis_lower:
-            col2.error('Invalid range', icon="🚨")
         x_range = [x_axis_lower, x_axis_upper]
         y_range = [y_axis_lower, y_axis_upper]
         
         #options to adjust offsets of each trace/lines
-        trace_update = np.array(list(map(partial(adjust_trace, container=st), legends)))
+        trace_update = np.array(list(map(partial(adjust_trace, container=st), legends, np.arange(len(legends)))))
 
         #options to add flags to the four quadrants
         col1, col2, col3, col4 = st.columns(4)
-        quadrant1_title = col1.text_input('Quadrant I', key='quadrant1_title')
-        quadrant2_title = col2.text_input('Quadrant II', key='quadrant2_title')
-        quadrant3_title = col3.text_input('Quadrant III', key='quadrant3_title')
-        quadrant4_title = col4.text_input('Quadrant IV', key='quadrant4_title')
-            
+        quadrant1_show = col1.checkbox('Show Quadrant I flag', key='quadrant1_show')
+        quadrant2_show = col2.checkbox('Show Quadrant II flag', key='quadrant2_show')
+        quadrant3_show = col3.checkbox('Show Quadrant III flag', key='quadrant3_show')
+        quadrant4_show = col4.checkbox('Show Quadrant IV flag', key='quadrant4_show')
+        
         submitted = st.form_submit_button('Update chart')
         expander.button('Reset chart', key='reset_chart_button')
         if submitted:
-            new_fig = plot.update(fig, x_lim=x_range, y_lim=y_range, title=plot_title,
-                                x_title=x_axis_title, y_title=y_axis_title,
-                                quad1_title=quadrant1_title, quad2_title=quadrant2_title,
-                                quad3_title=quadrant3_title, quad4_title=quadrant4_title,
+            new_fig = plot.update(fig, x_lim=x_range, y_lim=y_range,
+                                quad1_show=quadrant1_show, quad2_show=quadrant2_show,
+                                quad3_show=quadrant3_show, quad4_show=quadrant4_show,
                                 x_offsets=trace_update[:,0].astype(float), y_offsets=trace_update[:,1].astype(float),
-                                legends=trace_update[:,2])
+                                )
             return new_fig
     
     return fig
@@ -342,14 +330,26 @@ if len(uploaded_files) != 0:
                 st.experimental_rerun()
     with standard_plot_tab:
         st.write("template")
-
-
     #make plot using user-selected rows of data. 
     if st.session_state.graph_df.empty == False:
-        data_plot = plot.plot(st.session_state.graph_df) #ADD DUMMY VALUES
+        indices = np.array(st.session_state.graph_df.index)
+        index_legends = []
+        for tup in indices[np.arange(1, len(indices),2)]:
+            index_legends = np.append(index_legends, tup[2])
+            
+        data_plot = plot.plot(st.session_state.graph_df, legends=index_legends, 
+                              x_title=(indices[0])[2], y_title=(indices[1])[2],
+                              title=(indices[1])[2]+' vs '+(indices[0])[2])
+
         new_data_plot = customize_plot(data_plot)
-        st.plotly_chart(new_data_plot, use_container_width=True)
-        st.write(st.session_state.graph_df) 
+        
+        #Plotly chart configurations
+        config = dict({'scrollZoom': True,
+                   'displayModeBar': True,
+                   'editable': True})
+        
+        st.plotly_chart(new_data_plot, use_container_width=False, config=config)
+        st.write(st.session_state.graph_df)
     
     #st.write(st.session_state.df)
     #st.write(all_axis_df)  
