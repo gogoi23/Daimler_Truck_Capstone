@@ -8,10 +8,11 @@ import pandas as pd
 import numpy as np
 from requests import session
 import streamlit as st
-from functools import partial
+
 import datetime
 
 import plot
+import csv
 
 import os
 from streamlit.runtime.scriptrunner import ScriptRunContext, get_script_run_ctx
@@ -24,6 +25,48 @@ def listToString(s):
     for x in s:
         str1 = str1 + "__" + x
     return str1
+
+#this checks if a dictionary has an element. 
+def checkIfBlank(Dict,inputString):
+    if (Dict[inputString] == ''):
+        return False
+    else :
+        return True
+
+
+#this the code to do math operations on arrays element wise for the standard plots axises. 
+#current is a dictionary that contains the information about one standard plot
+#StandardPlot_DF is a data frame that contains all of a vehicles plots
+#Xdata1 is the name of the first column.
+#xdata2 is the name of the second column that does the math. 
+def mathStandardAxis(current,standardPlot_DF,XData1,XData2):
+    #this extracts the XData1 data from standardPlot_DF and puts it in an np array. 
+    standardXData1Values = np.array(standardPlot_DF.loc[current[XData1][3:]].values)
+    
+    #This checks if the XData2 function is not null. Otherwise it returns standardXData1Values
+    if ( XData2 in current[XData2]):
+        #this extracts the XData2 data from standardPlot_DF and puts it in an np array.
+        standardXData2Values = np.array(standardPlot_DF.loc[current[XData2][3:]].values)        
+        
+        #this code does the actual operations on the arrays. 
+        if(current['XOperation'] == "Sum"):
+            return np.add(standardXData1Values, standardXData2Values) 
+        
+        elif(current['XOperation'] == "Difference"):
+            return np.subtract(standardXData1Values, standardXData2Values) 
+                    
+        elif (current['XOperation'] == "Mutliplication"):
+            return np.multiply(standardXData1Values, standardXData2Values)
+                    
+        elif (current['XOperation'] == "Division"):
+            return np.divide(standardXData1Values, standardXData2Values)
+                    
+        elif (current['XOperation'] == "Average"):
+            return_value1 = np.add(standardXData1Values, standardXData2Values) 
+            return return_value1/2
+                    
+    else: 
+        return standardXData1Values
 
 #parse filename to get vehicle descriptor -- return a dict with names
 def parse_filename(name):
@@ -38,6 +81,7 @@ def parse_filename(name):
     test_load_case = (listToString(str_name[8:]))[2:]
 
     return {"mt": model_template, "tv": test_variant, "tb": test_bench, "lc": test_load_case}
+
 
 #this returns a numpy array of two lists added together 
 def math(df, v, lc, x, y, dataset_math):
@@ -131,14 +175,14 @@ def convert_df(df):
     # IMPORTANT: Cache the conversion to prevent computation on every rerun
     return df.to_csv().encode('utf-8')
 
-#creates widget/options to offset a given trace/line and change its name in the legends
-def adjust_trace(label, container):
-    col1, col2, col3 = container.columns(3)
-    x_off = col1.number_input(label + ' x-offset', value=0.0)
-    y_off = col2.number_input(label + ' y-offset', value=0.0)
-    legend_name = col3.text_input(label + ' name in legends')
-    return x_off, y_off, legend_name
+#creates widget/options to offset a given trace/line
+def adjust_trace(label, idx, container):
+    col1, col2 = container.columns(2)
+    x_off = col1.number_input(label + ' x-offset', value=0.0, key=f'{label}{idx}_x-off')
+    y_off = col2.number_input(label + ' y-offset', value=0.0, key=f'{label}{idx}_y-off')
+    return x_off, y_off
 
+#creates region of the page with all the widgets to customize/adjust the plot
 def customize_plot(fig):
     expander = st.expander('Adjust chart')
     with expander.form(key='update_plot'):
@@ -156,52 +200,40 @@ def customize_plot(fig):
         y_min = float(np.min(y_mins))
         y_max = float(np.max(y_maxs))
         
-        plot_title = st.text_input('Chart title', placeholder='ex. Bump Steer', key='plot_title')
-        
-        col1, col2 = st.columns(2, gap='small')
-        #options to adjust x,y axes title
-        x_axis_title = col1.text_input('X-axis title', key='x_axis_title')
-        y_axis_title = col2.text_input('Y-axis title', key='y_axis_title')
-        
         #options to adjust x-axis bounds
         col1_1, col1_2, col2_1, col2_2 = st.columns(4)
         x_axis_lower = col1_1.number_input('X-axis range', value=x_min, step=0.0001,
                                         format='%.4f', key='x_axis_lower')
         x_axis_upper = col1_2.number_input('X-axis upper bound', value=x_max, step=0.0001, 
                                         format='%.4f', key='x_axis_upper', label_visibility='hidden')
-        if x_axis_upper < x_axis_lower:
-            col1.error('Invalid range', icon="🚨")
         #options to adjust y-axis bounds
         y_axis_lower = col2_1.number_input('Y-axis range', value=y_min, step=0.0001, 
                                         format='%.4f', key='y_axis_lower')
         y_axis_upper = col2_2.number_input('Y-axis upper bound', value=y_max, step=0.0001, 
                                         format='%.4f', key='y_axis_upper', label_visibility='hidden')
-        if y_axis_upper < y_axis_lower:
-            col2.error('Invalid range', icon="🚨")
         x_range = [x_axis_lower, x_axis_upper]
         y_range = [y_axis_lower, y_axis_upper]
         
         #options to adjust offsets of each trace/lines
-        trace_update = np.array(list(map(partial(adjust_trace, container=st), legends)))
+        trace_update = np.array(list(map(partial(adjust_trace, container=st), legends, np.arange(len(legends)))))
 
         #options to add flags to the four quadrants
         col1, col2, col3, col4 = st.columns(4)
-        quadrant1_title = col1.text_input('Quadrant I', key='quadrant1_title')
-        quadrant2_title = col2.text_input('Quadrant II', key='quadrant2_title')
-        quadrant3_title = col3.text_input('Quadrant III', key='quadrant3_title')
-        quadrant4_title = col4.text_input('Quadrant IV', key='quadrant4_title')
-            
+        quadrant1_show = col1.checkbox('Show Quadrant I flag', key='quadrant1_show')
+        quadrant2_show = col2.checkbox('Show Quadrant II flag', key='quadrant2_show')
+        quadrant3_show = col3.checkbox('Show Quadrant III flag', key='quadrant3_show')
+        quadrant4_show = col4.checkbox('Show Quadrant IV flag', key='quadrant4_show')
+        
         submitted = st.form_submit_button('Update chart')
         expander.button('Reset chart', key='reset_chart_button')
         if submitted:
-            new_fig = plot.update(fig, x_lim=x_range, y_lim=y_range, title=plot_title,
-                                x_title=x_axis_title, y_title=y_axis_title,
-                                quad1_title=quadrant1_title, quad2_title=quadrant2_title,
-                                quad3_title=quadrant3_title, quad4_title=quadrant4_title,
+            new_fig = plot.update(fig, x_lim=x_range, y_lim=y_range,
+                                quad1_show=quadrant1_show, quad2_show=quadrant2_show,
+                                quad3_show=quadrant3_show, quad4_show=quadrant4_show,
                                 x_offsets=trace_update[:,0].astype(float), y_offsets=trace_update[:,1].astype(float),
-                                legends=trace_update[:,2])
+                                )
             return new_fig
-    
+
     return fig
 
 
@@ -231,6 +263,7 @@ if clicked:
 
 st.title("Welcome to the Kinney:Out Results Viewer")
 uploaded_files = st.file_uploader("Please select .csv files for data.", accept_multiple_files=True, type=['csv'])
+
 
 #create a df that is a concationation of all .csv files
 all_df = pd.DataFrame()
@@ -283,6 +316,7 @@ if len(uploaded_files) != 0:
 
     if 'df' not in st.session_state:
         st.session_state.df = pd.DataFrame()
+
         
     all_axis_df = pd.concat([all_df, st.session_state.df])
 
@@ -368,14 +402,28 @@ if len(uploaded_files) != 0:
                 st.experimental_rerun()
     with standard_plot_tab:
         st.write("template")
-
-
     #make plot using user-selected rows of data. 
     if st.session_state.graph_df.empty == False:
-        data_plot = plot.plot(st.session_state.graph_df, title="title", x_title="x axis", y_title="y axis") #ADD DUMMY VALUES
+
+        indices = np.array(st.session_state.graph_df.index)
+        index_legends = []
+        for tup in indices[np.arange(1, len(indices),2)]:
+            index_legends = np.append(index_legends, tup[2])
+            
+        data_plot = plot.plot(st.session_state.graph_df, legends=index_legends, 
+                              x_title=(indices[0])[2], y_title=(indices[1])[2],
+                              title=(indices[1])[2]+' vs '+(indices[0])[2])
+
         new_data_plot = customize_plot(data_plot)
-        st.plotly_chart(new_data_plot, use_container_width=True)
-        st.write(st.session_state.graph_df) 
+        
+        #Plotly chart configurations
+        config = dict({'scrollZoom': True,
+                   'displayModeBar': True,
+                   'editable': True})
+        
+        st.plotly_chart(new_data_plot, use_container_width=False, config=config)
+        st.write(st.session_state.graph_df)
+
     
     #st.write(st.session_state.df)
     #st.write(all_axis_df)  
@@ -390,4 +438,135 @@ if len(uploaded_files) != 0:
                 csv_name = "graph" + str(current_time.year) +"-" + str(current_time.month) + "-" + str(current_time.day)
         with col2:
             st.download_button(label="Download data as CSV", data=graph_csv, file_name=csv_name + ".csv", mime='text/csv')
+
+
+    #This is the code for the event handling when user presses the button labeled standard plots. 
+    if st.button("Standard Plots"):
+        # this is an array of dictionaries. Each dictionary will contain all
+        # all the information about one of the standard plots. 
+        standardPlots = [] 
+    
+        #Opens the standard plots csv file. Each row in this csv file contains information about one
+        #standard plot. 
+        with open('Kinney Standard Plots.csv','r') as csvFile: 
+            csv_reader = csv.reader(csvFile) # csv in object form 
+            
+            # used to count what row the forloop is in.
+            counter = 0 
+            
+            # iterates through every row in the csv file. Each row contains information about one standard plot
+            for line in csv_reader:
+                #this skips the first row in the csv file. The first row contains info about the 
+                # characteristics. This is useful to look at for a person but not needed for the 
+                # code
+                if counter != 0:
+                    #this is the actual dictionary that will get added to the standard plots array.
+                    #this contains all the actual data for a single standard plot
+                    standardPlot ={
+                        "title" : line[0],
+                        "xTitle" : line[1],
+                        "yTitle" : line[2],
+                        "DataFile": line[3],
+                        "XData1" : line[4],
+                        "XData2" : line[5],
+                        "XOperation": line[6],
+                        "XOffset": line[7],
+                        "YData1" : line[8],
+                        "YData2" : line[9],
+                        "YOperation": line[10],
+                        "YOffset": line[11],
+                        "StandardLinearMin" : line[12],
+                        "StandardLinearMax" : line[13],
+                        "Quad1Flag" : line[14],
+                        "Quad2Flag" : line[15],
+                        "Quad3Flag" : line[16],
+                        "Quad4Flag" : line[17],
+                        
+                    }
+                    
+                    #this adds the standard plot the standardPlots array 
+                    standardPlots.append(standardPlot)
+
+                # increments the line number
+                counter = counter +1
+
+        
+       
+        #go through all the standard plot axises. 
+        for current in standardPlots:
+            #goes through all the uploaded files.
+            for file in uploaded_files:
+                #if the standard plot matches the uploaded file it graphs data from that file. 
+                if current['DataFile'] in file.name:
+                    fileDict = parse_filename(file.name)
+
+                    
+                    #this gets the data from a data frame that contains all the files into
+                    # into a data frame that only contains file that matches with current['datafile']
+                    try:
+                        # some of the vehicles files are named lateral while some are named fa__lateral
+                        # this try block accounts for all of that 
+                        standardPlot_DF = all_df.loc[fileDict['tv']].loc[current['DataFile']]
+                    except: 
+                        if current['DataFile'] == 'lateral':
+                            standardPlot_DF = all_df.loc[fileDict['tv']].loc['fa__lateral']
+                        
+                    #these are the xvalues and yvalues put into a numpy array. See the 
+                    #mathStandardAxis code for more details. 
+                    xAxisValues = mathStandardAxis(current,standardPlot_DF,"XData1","XData2")
+                    yAxisValues = mathStandardAxis(current,standardPlot_DF,"YData1","YData2")
+
+                    #these are the x and yaxises. They will take all the values in xAxisValues and yAxisValues
+                    #and account for the linear min and max 
+                    trimmedXAxis = []
+                    trimmedYAxis = []
+
+                    #this is the standard linear max and min. It starts out being the yaxise's min and max
+                    #values. 
+                    stdLinMax = max(yAxisValues)
+                    stdLinMin = min(yAxisValues)
+
+                    #if the plot has a standard linear max or min the values above get changed to account for 
+                    # that. Otherwise trimmed x and y axis just become copies of xAxisValues and yAxisValues. 
+                    if (current["StandardLinearMin"] != ''):
+                        stdLinMin = current['StandardLinearMin']
+                    
+                    if (current["StandardLinearMax"] != ''):
+                        stdLinMax = current['StandardLinearMax']
+
+                    #this is the data plot that gets graphed 
+                    data_plot = plot.plot(
+                        [xAxisValues,yAxisValues],
+                        title = current['title'],
+                        y_title = current['yTitle'],
+                        x_title = current['xTitle']                    
+                    )
+
+                    #this sets the x and y offests 
+                    x_offsetValue = 0
+                    y_offsetValue = 0
+                    if checkIfBlank(current,'XOffset'):
+                        x_offsetValue = current['XOffset']
+                    if checkIfBlank(current,'YOffset'):
+                        y_offsetValue = current['YOffset']
+                
+
+                    #this sets the offests,quadrant flags, and x and ytitles. 
+                    data_plot = plot.update(data_plot,
+                        x_offset = x_offsetValue,
+                        y_offset= y_offsetValue,
+                        quad1_title = current['Quad1Flag'],
+                        quad2_title = current['Quad2Flag'],
+                        quad3_title = current['Quad3Flag'],
+                        quad4_title = current['Quad4Flag'],
+                        title = current['title'],
+                        y_title = current['yTitle'],
+                        x_title = current['xTitle']
+                    )
+
+
+                    #st.write(stdLinMax)
+                    #st.write(stdLinMin)
+                    #this graphs the plot. 
+                    st.plotly_chart(data_plot)
 
