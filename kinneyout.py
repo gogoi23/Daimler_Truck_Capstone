@@ -13,12 +13,9 @@ import datetime
 
 import plot
 
-# initial page config
-st.set_page_config(
-     page_title="Kinney:Out",
-     layout="wide",
-     initial_sidebar_state="expanded",
-)
+import os
+from streamlit.runtime.scriptrunner import ScriptRunContext, get_script_run_ctx
+from streamlit.elements.form import current_form_id
 
 #converting a list to a string for filenames
 def listToString(s):
@@ -88,9 +85,8 @@ def create_axis(df, v, tl, a_math, m):
     if len(a_math) == 2:
         #create new axis
         new_axis_vals = math(df, v, tl, a_math[0], a_math[1], m)
-        st.success('New dataset created', icon="✅")
     else:
-        st.error('Please select two datasets to create a new dataset', icon="🚨")
+        return None
 
     #return array of values
     return new_axis_vals
@@ -208,6 +204,31 @@ def customize_plot(fig):
     
     return fig
 
+
+# initial page config
+st.set_page_config(
+     page_title="Kinney:Out",
+     layout="wide",
+     initial_sidebar_state="expanded",
+)
+import tkinter as tk
+from tkinter import filedialog
+
+# Set up tkinter
+root = tk.Tk()
+root.withdraw()
+
+# Make folder picker dialog appear on top of other windows
+root.wm_attributes('-topmost', 1)
+
+# Folder picker button
+st.title('Folder Picker')
+st.write('Please select a folder:')
+clicked = st.button('Folder Picker')
+if clicked:
+    dirname = st.text_input('Selected folder:', filedialog.askdirectory(master=root))
+
+
 st.title("Welcome to the Kinney:Out Results Viewer")
 uploaded_files = st.file_uploader("Please select .csv files for data.", accept_multiple_files=True, type=['csv'])
 
@@ -315,11 +336,16 @@ if len(uploaded_files) != 0:
             #form sumbit button
             add_ds_submit = st.form_submit_button("Create new dataset")
             if add_ds_submit:
-                #adds to session state and creates row based on math functions
-                add_dataset(all_df, selected_vehicle, selected_lc, dataset_math, math_widget, rename_dataset)
-                #update all_axis_df based on added rows
-                all_axis_df = pd.concat([all_df, st.session_state.df])
+                try:
+                    #adds to session state and creates row based on math functions
+                    add_dataset(all_df, selected_vehicle, selected_lc, dataset_math, math_widget, rename_dataset)
+                    #update all_axis_df based on added rows
+                    all_axis_df = pd.concat([all_df, st.session_state.df])
+                    st.success('New dataset created!', icon="✅")
+                except:
+                    st.error('Error: Dataset not created', icon="🚨")
                 st.experimental_rerun()
+            
 
         #form to delete created dataset
         with st.form("del dataset", clear_on_submit=True):
@@ -346,7 +372,7 @@ if len(uploaded_files) != 0:
 
     #make plot using user-selected rows of data. 
     if st.session_state.graph_df.empty == False:
-        data_plot = plot.plot(st.session_state.graph_df) #ADD DUMMY VALUES
+        data_plot = plot.plot(st.session_state.graph_df, title="title", x_title="x axis", y_title="y axis") #ADD DUMMY VALUES
         new_data_plot = customize_plot(data_plot)
         st.plotly_chart(new_data_plot, use_container_width=True)
         st.write(st.session_state.graph_df) 

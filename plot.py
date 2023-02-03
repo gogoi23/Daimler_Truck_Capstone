@@ -40,7 +40,7 @@ def plot(data, x_lim=None, y_lim=None, title=None,
     fig = go.Figure()
     num_lines = data.shape[0] / 2
     #adding each line to the plot
-    for i in range(num_lines):
+    for i in range(int(num_lines)):
         fig.add_trace(
             go.Scatter(x=data[2*i], y=data[2*i + 1], mode='lines',
                        name=legends[i] if legends is not None else str(i))
