@@ -8,7 +8,7 @@ import pandas as pd
 import numpy as np
 from requests import session
 import streamlit as st
-
+from functools import partial
 import datetime
 
 import plot
@@ -512,7 +512,11 @@ if len(uploaded_files) != 0:
                         [xAxisValues,yAxisValues],
                         title = current['title'],
                         y_title = current['yTitle'],
-                        x_title = current['xTitle']                    
+                        x_title = current['xTitle'],
+                        quad1_title = current['Quad1Flag'],
+                        quad2_title = current['Quad2Flag'],
+                        quad3_title = current['Quad3Flag'],
+                        quad4_title = current['Quad4Flag']                 
                     )
 
                     #this sets the x and y offests 
@@ -526,20 +530,16 @@ if len(uploaded_files) != 0:
 
                     #this sets the offests,quadrant flags, and x and ytitles. 
                     data_plot = plot.update(data_plot,
-                        x_offset = x_offsetValue,
-                        y_offset= y_offsetValue,
-                        quad1_title = current['Quad1Flag'],
-                        quad2_title = current['Quad2Flag'],
-                        quad3_title = current['Quad3Flag'],
-                        quad4_title = current['Quad4Flag'],
-                        title = current['title'],
-                        y_title = current['yTitle'],
-                        x_title = current['xTitle']
+                        x_offsets = [x_offsetValue],
+                        y_offsets = [y_offsetValue]
                     )
 
 
                     #st.write(stdLinMax)
                     #st.write(stdLinMin)
                     #this graphs the plot. 
-                    st.plotly_chart(data_plot)
+                    config = dict({'scrollZoom': True,
+                        'displayModeBar': True,
+                        'editable': True})
+                    st.plotly_chart(data_plot, config=config)
 
