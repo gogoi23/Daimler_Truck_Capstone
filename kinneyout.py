@@ -178,8 +178,22 @@ def convert_df(df):
 #creates widget/options to offset a given trace/line
 def adjust_trace(label, idx, container):
     col1, col2 = container.columns(2)
-    x_off = col1.number_input(label + ' x-offset', value=0.0, key=f'{label}{idx}_x-off')
-    y_off = col2.number_input(label + ' y-offset', value=0.0, key=f'{label}{idx}_y-off')
+    if idx == 0:
+        x_off = col1.number_input(label + ' x-offset', value=0.0, key=f'{label}{idx}_x-off',
+                                  help="""Offset a line in the x-direction. Each line can have 
+                                  its own x-offset. The widget which changes a given line is 
+                                  labeled with the y-parameter used to create the line. If the 
+                                  legends of the graph are unchanged, the y-parameters for the lines
+                                  can be found there.""")
+        y_off = col2.number_input(label + ' y-offset', value=0.0, key=f'{label}{idx}_y-off',
+                                  help="""Offset a line in the y-direction. Each line can have 
+                                  its own y-offset. The widget which changes a given line is 
+                                  labeled with the y-parameter used to create the line. If the 
+                                  legends of the graph are unchanged, the y-parameters for the lines
+                                  can be found there.""")
+    else:
+        x_off = col1.number_input(label + ' x-offset', value=0.0, key=f'{label}{idx}_x-off')
+        y_off = col2.number_input(label + ' y-offset', value=0.0, key=f'{label}{idx}_y-off')
     return x_off, y_off
 
 #creates region of the page with all the widgets to customize/adjust the plot
@@ -203,14 +217,18 @@ def customize_plot(fig):
         #options to adjust x-axis bounds
         col1_1, col1_2, col2_1, col2_2 = st.columns(4)
         x_axis_lower = col1_1.number_input('X-axis range', value=x_min, step=0.0001,
-                                        format='%.4f', key='x_axis_lower')
-        x_axis_upper = col1_2.number_input('X-axis upper bound', value=x_max, step=0.0001, 
-                                        format='%.4f', key='x_axis_upper', label_visibility='hidden')
+                                        format='%.4f', key='x_axis_lower',
+                                        help="Enter a number to set as the lower bound of the x-axis of the graph.")
+        x_axis_upper = col1_2.number_input(' ', value=x_max, step=0.0001, 
+                                        format='%.4f', key='x_axis_upper', #label_visibility='hidden',
+                                        help="Enter a number to set as the upper bound of the x-axis of the graph.")
         #options to adjust y-axis bounds
         y_axis_lower = col2_1.number_input('Y-axis range', value=y_min, step=0.0001, 
-                                        format='%.4f', key='y_axis_lower')
-        y_axis_upper = col2_2.number_input('Y-axis upper bound', value=y_max, step=0.0001, 
-                                        format='%.4f', key='y_axis_upper', label_visibility='hidden')
+                                        format='%.4f', key='y_axis_lower',
+                                        help="Enter a number to set as the lower bound of the y-axis of the graph.")
+        y_axis_upper = col2_2.number_input(' ', value=y_max, step=0.0001, 
+                                        format='%.4f', key='y_axis_upper', #label_visibility='hidden',
+                                        help="Enter a number to set as the upper bound of the y-axis of the graph.")
         x_range = [x_axis_lower, x_axis_upper]
         y_range = [y_axis_lower, y_axis_upper]
         
