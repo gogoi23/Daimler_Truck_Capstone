@@ -18,6 +18,10 @@ import os
 from streamlit.runtime.scriptrunner import ScriptRunContext, get_script_run_ctx
 from streamlit.elements.form import current_form_id
 
+import tkinter as tk
+from tkinter import ttk
+from tkinter import filedialog as fd
+
 
 #converting a list to a string for filenames
 def listToString(s):
@@ -254,9 +258,6 @@ st.set_page_config(
      layout="wide",
      initial_sidebar_state="expanded",
 )
-import tkinter as tk
-from tkinter import ttk
-from tkinter import filedialog as fd
 
 # Set up tkinter
 root = tk.Tk()
