@@ -18,6 +18,11 @@ import os
 from streamlit.runtime.scriptrunner import ScriptRunContext, get_script_run_ctx
 from streamlit.elements.form import current_form_id
 
+import tkinter as tk
+from tkinter import ttk
+from tkinter import filedialog as fd
+
+
 #converting a list to a string for filenames
 def listToString(s):
     # initialize an empty string
@@ -32,6 +37,12 @@ def checkIfBlank(Dict,inputString):
         return False
     else :
         return True
+
+def remove_duplicate_files(l):
+    for d in l:
+        if d['fn'] not in [d1['fn'] for d1 in st.session_state.file_list]:
+            st.session_state.file_list.append(d)
+
 
 
 #this the code to do math operations on arrays element wise for the standard plots axises. 
@@ -71,7 +82,8 @@ def mathStandardAxis(current,standardPlot_DF,XData1,XData2):
 #parse filename to get vehicle descriptor -- return a dict with names
 def parse_filename(name):
     #removing .csv and splitting name based on '__'
-    rem_type = name.split('.csv')
+    rem_dir = name.rsplit('/', 1)[-1]
+    rem_type = rem_dir.split('.csv')
     str_name = rem_type[0].split('__')
 
     #concatting the seperated strings to give the correct vehicle descriptors
@@ -113,6 +125,9 @@ def get_load_case(d, v):
         test_load = [ x[1] for x in vehicle ]
 
     return test_load
+
+def get_vehicle(d):
+    return [ x[0] for x in d.index.tolist() ]
 
 #get second index based on df and keyword passed in paramenter, return list
 def get_dataset(d, v, tl):
@@ -244,63 +259,129 @@ st.set_page_config(
      initial_sidebar_state="expanded",
 )
 
+# Set up tkinter
+root = tk.Tk()
+root.withdraw()
+
+# Make folder picker dialog appear on top of other windows
+root.wm_attributes('-topmost', 1)
+
 st.title("Welcome to the Kinney:Out Results Viewer")
-uploaded_files = st.file_uploader("Please select .csv files for data.", accept_multiple_files=True, type=['csv'])
+#uploaded_files = st.file_uploader("Please select .csv files for data.", accept_multiple_files=True, type=['csv'])
 
 
 #create a df that is a concationation of all .csv files
 all_df = pd.DataFrame()
 
+#initalize all session state variables
 if 'graph_df' not in st.session_state:
-        st.session_state.graph_df = pd.DataFrame()
+    st.session_state.graph_df = pd.DataFrame()
+if 'uploaded_df' not in st.session_state:
+    st.session_state.uploaded_df = pd.DataFrame()
+if 'vehicle_list' not in st.session_state:
+    st.session_state.vehicle_list = []
+if 'load_case_list' not in st.session_state:
+    st.session_state.load_case_list = []
+if 'file_list' not in st.session_state:
+    st.session_state.file_list = []
 
-#create a list to hold all datasets
-vehicle_list = []
-load_case_list = []
+# Folder picker submit form
+with st.form("file picker"):
+    st.write('_(Optional)_ Input a starting path to browse files:')
+
+    c1, c2 = st.columns([5,1])
+    with c1:
+        #get path by user
+        file_path = st.text_input('Start path:', placeholder="C:\Documents\ ", label_visibility="collapsed")
+
+        #copying path often puts in double quotes, however, path needs to to be without it
+        #removes double quotes from give path if it exists
+        try:
+            file_path = file_path.lstrip('"')
+        except:
+            file_path = file_path
+    with c2:
+        #button to initiate browsing files
+        browse_files_clicked = st.form_submit_button('Browse Files', help="User is able to choose a file path to start browsing files from.")
+
+        if browse_files_clicked:
+            fd_uploaded_files = fd.askopenfiles(master=root, initialdir=file_path, filetypes=[("CSV files","*.csv")])
+
+            temp_all_df = pd.DataFrame()
+            vehicle_list = []
+            load_case_list = []
+            filenames = []
+            
+            #go through all files and add it to a main dataframe
+            for uploaded_file in fd_uploaded_files:
+                #read csv file and convert to df
+                df = pd.read_csv(uploaded_file)
+                
+                #parse the csv file name into a list of four segments
+                file_strings = parse_filename(uploaded_file.name)
+
+                #create a temporary df for manipulation
+                temp_df = df
+
+                #clean up the testbench name
+                temp_df.iloc[:,0] = temp_df.iloc[:,0].str.removeprefix("result/$S_testbench/$RS_Testrig_output/$S_testbench.$X_")
+
+                #add another column based on file and add it to the index to create a MultiIndex
+                temp_df = temp_df.assign(vehicle = file_strings["tv"])
+                temp_df = temp_df.assign(test_load = file_strings["lc"])
+                temp_df.rename({'time':'dataset'}, axis=1, inplace=True)
+                temp_df.set_index(['vehicle','test_load','dataset'], inplace=True)
+
+                #resets all column labels to be 0 to n rather than the time values
+                temp_df.columns = range(temp_df.shape[1])
+
+                #checking if user is adding a repeat dataset
+                for d in st.session_state.file_list:
+                    if d['df'].equals(temp_df):
+                        c1.error('Duplicate file not added: ' + d['fn'], icon="🚨")
+                        break
+                else:
+                    #add temp df to df holding all df's and files in session state
+                    temp_all_df = pd.concat([temp_all_df, temp_df])
+
+                    filename = (uploaded_file.name).rsplit('/', 1)[-1]
+                    filenames.append({"fn":filename, "df":temp_df})
+                continue
+            
+            #assigns variables to session state to be used even if the page reloads
+            if not temp_all_df.empty:
+                st.session_state.uploaded_df = pd.concat([st.session_state.uploaded_df, temp_all_df]).drop_duplicates(keep="first")
+                remove_duplicate_files(filenames)
+                c1.success('File(s) added: ' + str([d['fn'] for d in filenames]), icon="✅")
+
+#file delete form
+#DELETE LEAVE TWO SOMETIMES WHYYY
+with st.form("delete files form", clear_on_submit=True):
+    c1, c2 = st.columns([5,1])
+    with c1:
+        files = st.multiselect("delete files",  st.session_state.file_list, label_visibility="collapsed", format_func=lambda x: x['fn'])
+    with c2:
+        remove_files = st.form_submit_button('Remove Files', help="Remove files from the set that you are working with")
+
+        if remove_files:
+            for d in files:
+                st.session_state.uploaded_df = pd.concat([st.session_state.uploaded_df, d['df']]).drop_duplicates(keep=False)
+                st.session_state.file_list = [i for i in st.session_state.file_list if d['fn'] not in i['fn']]
+            st.experimental_rerun()
+        
+            
+
 
 #check whether user has uploaded any files
-if len(uploaded_files) != 0:
+if len(st.session_state.uploaded_df) != 0:
     #if so, run through files and run rest of code
     dataset_list = []
 
-    #go through all files and add it to a main dataframe
-    for uploaded_file in uploaded_files:
-        #read csv file and convert to df
-        df = pd.read_csv(uploaded_file)
-
-        #parse the csv file name into a list of four segments
-        filenames = parse_filename(uploaded_file.name)
-
-        #add filename to list to choose from
-        vehicle_list.append(filenames['tv'])
-        load_case_list.append(filenames["lc"])
-
-        #create a temporary df for manipulation
-        temp_df = df
-
-        #clean up the testbench name
-        temp_df.iloc[:,0] = temp_df.iloc[:,0].str.removeprefix("result/$S_testbench/$RS_Testrig_output/$S_testbench.$X_")
-
-        #add another column based on file and add it to the index to create a MultiIndex
-        temp_df = temp_df.assign(vehicle = filenames["tv"])
-        temp_df = temp_df.assign(test_load = filenames["lc"])
-        temp_df.rename({'time':'dataset'}, axis=1, inplace=True)
-        temp_df.set_index(['vehicle','test_load','dataset'], inplace=True)
-
-        #add temp df to df holding all df's
-        all_df = pd.concat([all_df, temp_df])
-
-    #resets all column labels to be 0 to n rather than the time values
-    all_df.columns = range(all_df.shape[1])
-
-    #remove duplicated from the each list
-    vehicle_list = [*set(vehicle_list)]
-    load_case_list = [*set(load_case_list)]
-
+    all_df = st.session_state.uploaded_df
+    st.write(all_df)
     if 'df' not in st.session_state:
         st.session_state.df = pd.DataFrame()
 
-        
     all_axis_df = pd.concat([all_df, st.session_state.df])
 
     graph_tab, dataset_tab, standard_plot_tab = st.sidebar.tabs(["Graph", "Dataset Manipulation", "Standard Plot"])
@@ -308,7 +389,7 @@ if len(uploaded_files) != 0:
     #TO DO: CHECK FOR MAX OF 5 GRAPHS
 
     with graph_tab:
-        graph_selected_vehicle = st.selectbox("Select a vehicle", vehicle_list, key="graph_vehicle_select")
+        graph_selected_vehicle = st.selectbox("Select a vehicle", [*set(get_vehicle(all_axis_df))], key="graph_vehicle_select")
         if 'load_case' not in st.session_state:
             st.session_state.load_case = [*set(get_load_case(all_axis_df, graph_selected_vehicle))]
         check_graph_lc(all_axis_df, st.session_state.graph_df, graph_selected_vehicle)
@@ -335,8 +416,8 @@ if len(uploaded_files) != 0:
 
     with dataset_tab:
         #select box widget to choose vehicle dataset
-        selected_vehicle = st.selectbox("Select a vehicle", vehicle_list, key="vehicle_select")
-        selected_lc = st.selectbox("Select a load case", load_case_list, key="lc_select")
+        selected_vehicle = st.selectbox("Select a vehicle", [*set(get_vehicle(all_axis_df))], key="vehicle_select")
+        selected_lc = st.selectbox("Select a load case", [*set(get_load_case(all_axis_df, graph_selected_vehicle))], key="lc_select")
         dataset_list = get_dataset(all_df, selected_vehicle, selected_lc)
 
         #create a list for choose math functions
@@ -384,7 +465,29 @@ if len(uploaded_files) != 0:
                 all_axis_df = pd.concat([all_df, st.session_state.df])
                 st.experimental_rerun()
     with standard_plot_tab:
-        st.write("template")
+        if 'standard_df' not in st.session_state:
+            st.session_state.standard_df = pd.DataFrame()
+        if 'standard_filename' not in st.session_state:
+            st.session_state.standard_filename = ""
+        with st.form('standard_plot_file'):
+            #get path by user
+            standard_file_path = st.text_input('Start path:', placeholder="C:\Documents\ ", label_visibility="collapsed")
+            standard_file_clicked = st.form_submit_button('Add Standard Plot File', help="User is able to choose a file path to get standard plot file.")
+
+            if standard_file_clicked:
+                uploaded_file = fd.askopenfile(master=root, initialdir=standard_file_path, filetypes=[("CSV files","*.csv")])
+
+                st.session_state.standard_filename = uploaded_file.name
+                st.session_state.standard_df = pd.read_csv(uploaded_file)
+        
+        st.write("Chosen Standard Plot File: " + st.session_state.standard_filename)
+        
+        
+
+
+
+
+
     #make plot using user-selected rows of data. 
     if st.session_state.graph_df.empty == False:
 
@@ -406,11 +509,6 @@ if len(uploaded_files) != 0:
         
         st.plotly_chart(new_data_plot, use_container_width=False, config=config)
         st.write(st.session_state.graph_df)
-
-    
-    #st.write(st.session_state.df)
-    #st.write(all_axis_df)  
-       
 
         graph_csv = convert_df(st.session_state.graph_df)
         col1, col2 = st.columns([3, 1])
