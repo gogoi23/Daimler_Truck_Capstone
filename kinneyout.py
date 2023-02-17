@@ -18,6 +18,17 @@ import os
 from streamlit.runtime.scriptrunner import ScriptRunContext, get_script_run_ctx
 from streamlit.elements.form import current_form_id
 
+import tkinter as tk
+from tkinter import ttk
+from tkinter import filedialog as fd
+
+# Set up tkinter
+root = tk.Tk()
+root.withdraw()
+
+# Make folder picker dialog appear on top of other windows
+root.wm_attributes('-topmost', 1)
+
 
 #converting a list to a string for filenames
 def listToString(s):
@@ -43,17 +54,17 @@ def remove_duplicate_files(l):
 
 #this the code to do math operations on arrays element wise for the standard plots axises. 
 #current is a dictionary that contains the information about one standard plot
-#StandardPlot_DF is a data frame that contains all of a vehicles plots
+#standard_plot_DF is a data frame that contains all of a vehicles plots
 #Xdata1 is the name of the first column.
 #xdata2 is the name of the second column that does the math. 
-def mathStandardAxis(current,standardPlot_DF,XData1,XData2):
-    #this extracts the XData1 data from standardPlot_DF and puts it in an np array. 
-    standardXData1Values = np.array(standardPlot_DF.loc[current[XData1][3:]].values)
+def mathStandardAxis(current,standard_plot_DF,XData1,XData2):
+    #this extracts the XData1 data from standard_plot_DF and puts it in an np array. 
+    standardXData1Values = np.array(standard_plot_DF.loc[current[XData1][3:]].values)
     
     #This checks if the XData2 function is not null. Otherwise it returns standardXData1Values
     if ( XData2 in current[XData2]):
-        #this extracts the XData2 data from standardPlot_DF and puts it in an np array.
-        standardXData2Values = np.array(standardPlot_DF.loc[current[XData2][3:]].values)        
+        #this extracts the XData2 data from standard_plot_DF and puts it in an np array.
+        standardXData2Values = np.array(standard_plot_DF.loc[current[XData2][3:]].values)        
         
         #this code does the actual operations on the arrays. 
         if(current['XOperation'] == "Sum"):
@@ -111,6 +122,8 @@ def math(df, v, lc, x, y, dataset_math):
         return_value1 = np.add(axis1, axis2) 
         return_value = return_value1/2
     return return_value
+def get_vehicle(d):
+    return [ x[0] for x in d.index.tolist() ]
 
 #get second index based on df and keyword passed in paramenter, return list
 def get_load_case(d, v):
@@ -121,9 +134,6 @@ def get_load_case(d, v):
         test_load = [ x[1] for x in vehicle ]
 
     return test_load
-
-def get_vehicle(d):
-    return [ x[0] for x in d.index.tolist() ]
 
 #get second index based on df and keyword passed in paramenter, return list
 def get_dataset(d, v, tl):
@@ -254,16 +264,6 @@ st.set_page_config(
      layout="wide",
      initial_sidebar_state="expanded",
 )
-import tkinter as tk
-from tkinter import ttk
-from tkinter import filedialog as fd
-
-# Set up tkinter
-root = tk.Tk()
-root.withdraw()
-
-# Make folder picker dialog appear on top of other windows
-root.wm_attributes('-topmost', 1)
 
 st.title("Welcome to the Kinney:Out Results Viewer")
 #uploaded_files = st.file_uploader("Please select .csv files for data.", accept_multiple_files=True, type=['csv'])
@@ -354,16 +354,18 @@ with st.form("file picker"):
                 c1.success('File(s) added: ' + str([d['fn'] for d in filenames]), icon="✅")
 
 #file delete form
-#DELETE LEAVE TWO SOMETIMES WHYYY
+#LEAVES ROWS BECAUSE DATA IS EXACT SAME FROM VEHICLE A AND B ASK ABOUT
 with st.form("delete files form", clear_on_submit=True):
     c1, c2 = st.columns([5,1])
     with c1:
         files = st.multiselect("delete files",  st.session_state.file_list, label_visibility="collapsed", format_func=lambda x: x['fn'])
+
     with c2:
         remove_files = st.form_submit_button('Remove Files', help="Remove files from the set that you are working with")
 
         if remove_files:
             for d in files:
+                print(d)
                 st.session_state.uploaded_df = pd.concat([st.session_state.uploaded_df, d['df']]).drop_duplicates(keep=False)
                 st.session_state.file_list = [i for i in st.session_state.file_list if d['fn'] not in i['fn']]
             st.experimental_rerun()
@@ -377,7 +379,10 @@ if len(st.session_state.uploaded_df) != 0:
     dataset_list = []
 
     all_df = st.session_state.uploaded_df
-    st.write(all_df)
+
+    #print the df of the files we imported -- for testing --
+    #st.write(all_df)
+
     if 'df' not in st.session_state:
         st.session_state.df = pd.DataFrame()
 
@@ -468,6 +473,8 @@ if len(st.session_state.uploaded_df) != 0:
             st.session_state.standard_df = pd.DataFrame()
         if 'standard_filename' not in st.session_state:
             st.session_state.standard_filename = ""
+        if 'standard_plot' not in st.session_state:
+            st.session_state.standard_plot = ""
         with st.form('standard_plot_file'):
             #get path by user
             standard_file_path = st.text_input('Start path:', placeholder="C:\Documents\ ", label_visibility="collapsed")
@@ -477,15 +484,142 @@ if len(st.session_state.uploaded_df) != 0:
                 uploaded_file = fd.askopenfile(master=root, initialdir=standard_file_path, filetypes=[("CSV files","*.csv")])
 
                 st.session_state.standard_filename = uploaded_file.name
-                st.session_state.standard_df = pd.read_csv(uploaded_file)
+                st.session_state.standard_df = pd.read_csv(uploaded_file, keep_default_na=False)
         
         st.write("Chosen Standard Plot File: " + st.session_state.standard_filename)
+
+        st.write(st.session_state.standard_df)
+
+        #select box widget to choose vehicle dataset
+        standard_selected_vehicle = st.selectbox("Select a vehicle", [*set(get_vehicle(all_axis_df))], key="standard_vehicle_select")
+        standard_df = st.session_state.standard_df
+        standard_df = standard_df.reset_index() 
+
+        if not standard_df.empty:
+            # this is an array of dictionaries. Each dictionary will contain all
+            # all the information about one of the standard plots. 
+            standard_plots = [] 
+            standard_plot_names = [None]
+
+            #iterate through each row in the csv file/df
+            for index, line in standard_df.iterrows():
+                #this is the actual dictionary that will get added to the standard plots array.
+                #this contains all the actual data for a single standard plot
+                standard_plot ={
+                    "title" : line['Characteristic'],
+                    "xTitle" : line['X Title'],
+                    "yTitle" : line['Y Title'],
+                    "DataFile": line['Data File'],
+                    "XData1" : line['X Data1'],
+                    "XData2" : line['X Data2'],
+                    "XOperation": line['X Operation'],
+                    "XOffset": line['X Offset'],
+                    "YData1" : line['Y Data1'],
+                    "YData2" : line['Y Data2'],
+                    "YOperation": line['Y Operation'],
+                    "YOffset": line['Y Offset'],
+                    "StandardLinearMin" : line['Standard Linear Min'],
+                    "StandardLinearMax" : line['Standard Linear Max'],
+                    "Quad1Flag" : line['Quad1 Flag'],
+                    "Quad2Flag" : line['Quad2 Flag'],
+                    "Quad3Flag" : line['Quad3 Flag'],
+                    "Quad4Flag" : line['Quad4 Flag'],
+                    
+                }
+                #this adds the standard plot the standard_plots array 
+                standard_plots.append(standard_plot)
+                standard_plot_names.append(standard_plot['title'])
+
+            #selectbox to choose plot to grpah based off to csv file titles
+            standard_plot_selector = st.selectbox("Choose a standard plot to plot: ", standard_plot_names)
+
+            #go through all the standard plot axises. 
+            for current in standard_plots:
+                #user can select to not show any plot
+                if standard_plot_selector is None:
+                    st.session_state.standard_plot = ""
+                    break
+                #graph is drawn based on selected plot
+                if current['title'] == standard_plot_selector:
+                    if current['DataFile'] in get_load_case(all_df, standard_selected_vehicle):
+
+                        #this gets the data from a data frame that contains all the files into
+                        # into a data frame that only contains file that matches with current['datafile']
+                        try:
+                            # some of the vehicles files are named lateral while some are named fa__lateral
+                            # this try block accounts for all of that 
+                            standard_plot_DF = all_df.loc[standard_selected_vehicle].loc[current['DataFile']]
+                        except: 
+                            if current['DataFile'] == 'lateral':
+                                standard_plot_DF = all_df.loc[standard_selected_vehicle].loc['fa__lateral']
+                            
+                        #these are the xvalues and yvalues put into a numpy array. See the 
+                        #mathStandardAxis code for more details. 
+                        xAxisValues = mathStandardAxis(current,standard_plot_DF,"XData1","XData2")
+                        yAxisValues = mathStandardAxis(current,standard_plot_DF,"YData1","YData2")
+
+                        #these are the x and yaxises. They will take all the values in xAxisValues and yAxisValues
+                        #and account for the linear min and max 
+                        trimmedXAxis = []
+                        trimmedYAxis = []
+
+                        #this is the standard linear max and min. It starts out being the yaxise's min and max
+                        #values. 
+                        stdLinMax = max(yAxisValues)
+                        stdLinMin = min(yAxisValues)
+
+                        #if the plot has a standard linear max or min the values above get changed to account for 
+                        # that. Otherwise trimmed x and y axis just become copies of xAxisValues and yAxisValues. 
+                        if (current["StandardLinearMin"] != ''):
+                            stdLinMin = current['StandardLinearMin']
+                        
+                        if (current["StandardLinearMax"] != ''):
+                            stdLinMax = current['StandardLinearMax']
+
+                        #this is the data plot that gets graphed 
+                        data_plot = plot.plot(
+                            [xAxisValues,yAxisValues],
+                            title = current['title'],
+                            y_title = current['yTitle'],
+                            x_title = current['xTitle'],
+                            quad1_title = current['Quad1Flag'],
+                            quad2_title = current['Quad2Flag'],
+                            quad3_title = current['Quad3Flag'],
+                            quad4_title = current['Quad4Flag']                 
+                        )
+
+                        #this sets the x and y offests 
+                        x_offsetValue = 0
+                        y_offsetValue = 0
+                        if checkIfBlank(current,'XOffset'):
+                            x_offsetValue = current['XOffset']
+                        if checkIfBlank(current,'YOffset'):
+                            y_offsetValue = current['YOffset']
+                    
+
+                        #this sets the offests,quadrant flags, and x and ytitles. 
+                        data_plot = plot.update(data_plot,
+                            x_offsets = [x_offsetValue],
+                            y_offsets = [y_offsetValue]
+                        )
+
+                        #return the data plot to be graphed on the main page rather than side bar
+                        st.session_state.standard_plot = data_plot
+                        st.success('Standard Plot created!', icon="✅")
+                    else:
+                        st.error('Error: Dataset not uploaded to plot', icon="🚨")
         
-        
+        #give a warning that standard plot won't show unless other graph is cleared
+        if st.session_state.standard_plot != "" and st.session_state.graph_df.empty == False:
+            st.warning("Don't see your standard plot? Try clearing the main graph first.", icon="⚠️")
 
-
-
-
+    #plot the standard plot if there is no graph on other tab
+    if st.session_state.standard_plot != "" and st.session_state.graph_df.empty:
+        config = dict({'scrollZoom': True,
+                            'displayModeBar': True,
+                            'editable': True})
+        new_data_plot = customize_plot(st.session_state.standard_plot)
+        st.plotly_chart(new_data_plot, use_container_width=False, config=config)
 
     #make plot using user-selected rows of data. 
     if st.session_state.graph_df.empty == False:
@@ -507,8 +641,10 @@ if len(st.session_state.uploaded_df) != 0:
                    'editable': True})
         
         st.plotly_chart(new_data_plot, use_container_width=False, config=config)
+        
+        
+        #export dataset as csv
         st.write(st.session_state.graph_df)
-
         graph_csv = convert_df(st.session_state.graph_df)
         col1, col2 = st.columns([3, 1])
         with col1:
@@ -518,135 +654,4 @@ if len(st.session_state.uploaded_df) != 0:
                 csv_name = "graph" + str(current_time.year) +"-" + str(current_time.month) + "-" + str(current_time.day)
         with col2:
             st.download_button(label="Download data as CSV", data=graph_csv, file_name=csv_name + ".csv", mime='text/csv')
-
-
-    #This is the code for the event handling when user presses the button labeled standard plots. 
-    if st.button("Standard Plots"):
-        # this is an array of dictionaries. Each dictionary will contain all
-        # all the information about one of the standard plots. 
-        standardPlots = [] 
-    
-        #Opens the standard plots csv file. Each row in this csv file contains information about one
-        #standard plot. 
-        with open('Kinney Standard Plots.csv','r') as csvFile: 
-            csv_reader = csv.reader(csvFile) # csv in object form 
-            
-            # used to count what row the forloop is in.
-            counter = 0 
-            
-            # iterates through every row in the csv file. Each row contains information about one standard plot
-            for line in csv_reader:
-                #this skips the first row in the csv file. The first row contains info about the 
-                # characteristics. This is useful to look at for a person but not needed for the 
-                # code
-                if counter != 0:
-                    #this is the actual dictionary that will get added to the standard plots array.
-                    #this contains all the actual data for a single standard plot
-                    standardPlot ={
-                        "title" : line[0],
-                        "xTitle" : line[1],
-                        "yTitle" : line[2],
-                        "DataFile": line[3],
-                        "XData1" : line[4],
-                        "XData2" : line[5],
-                        "XOperation": line[6],
-                        "XOffset": line[7],
-                        "YData1" : line[8],
-                        "YData2" : line[9],
-                        "YOperation": line[10],
-                        "YOffset": line[11],
-                        "StandardLinearMin" : line[12],
-                        "StandardLinearMax" : line[13],
-                        "Quad1Flag" : line[14],
-                        "Quad2Flag" : line[15],
-                        "Quad3Flag" : line[16],
-                        "Quad4Flag" : line[17],
-                        
-                    }
-                    
-                    #this adds the standard plot the standardPlots array 
-                    standardPlots.append(standardPlot)
-
-                # increments the line number
-                counter = counter +1
-
-        
-       
-        #go through all the standard plot axises. 
-        for current in standardPlots:
-            #goes through all the uploaded files.
-            for file in uploaded_files:
-                #if the standard plot matches the uploaded file it graphs data from that file. 
-                if current['DataFile'] in file.name:
-                    fileDict = parse_filename(file.name)
-
-                    
-                    #this gets the data from a data frame that contains all the files into
-                    # into a data frame that only contains file that matches with current['datafile']
-                    try:
-                        # some of the vehicles files are named lateral while some are named fa__lateral
-                        # this try block accounts for all of that 
-                        standardPlot_DF = all_df.loc[fileDict['tv']].loc[current['DataFile']]
-                    except: 
-                        if current['DataFile'] == 'lateral':
-                            standardPlot_DF = all_df.loc[fileDict['tv']].loc['fa__lateral']
-                        
-                    #these are the xvalues and yvalues put into a numpy array. See the 
-                    #mathStandardAxis code for more details. 
-                    xAxisValues = mathStandardAxis(current,standardPlot_DF,"XData1","XData2")
-                    yAxisValues = mathStandardAxis(current,standardPlot_DF,"YData1","YData2")
-
-                    #these are the x and yaxises. They will take all the values in xAxisValues and yAxisValues
-                    #and account for the linear min and max 
-                    trimmedXAxis = []
-                    trimmedYAxis = []
-
-                    #this is the standard linear max and min. It starts out being the yaxise's min and max
-                    #values. 
-                    stdLinMax = max(yAxisValues)
-                    stdLinMin = min(yAxisValues)
-
-                    #if the plot has a standard linear max or min the values above get changed to account for 
-                    # that. Otherwise trimmed x and y axis just become copies of xAxisValues and yAxisValues. 
-                    if (current["StandardLinearMin"] != ''):
-                        stdLinMin = current['StandardLinearMin']
-                    
-                    if (current["StandardLinearMax"] != ''):
-                        stdLinMax = current['StandardLinearMax']
-
-                    #this is the data plot that gets graphed 
-                    data_plot = plot.plot(
-                        [xAxisValues,yAxisValues],
-                        title = current['title'],
-                        y_title = current['yTitle'],
-                        x_title = current['xTitle'],
-                        quad1_title = current['Quad1Flag'],
-                        quad2_title = current['Quad2Flag'],
-                        quad3_title = current['Quad3Flag'],
-                        quad4_title = current['Quad4Flag']                 
-                    )
-
-                    #this sets the x and y offests 
-                    x_offsetValue = 0
-                    y_offsetValue = 0
-                    if checkIfBlank(current,'XOffset'):
-                        x_offsetValue = current['XOffset']
-                    if checkIfBlank(current,'YOffset'):
-                        y_offsetValue = current['YOffset']
-                
-
-                    #this sets the offests,quadrant flags, and x and ytitles. 
-                    data_plot = plot.update(data_plot,
-                        x_offsets = [x_offsetValue],
-                        y_offsets = [y_offsetValue]
-                    )
-
-
-                    #st.write(stdLinMax)
-                    #st.write(stdLinMin)
-                    #this graphs the plot. 
-                    config = dict({'scrollZoom': True,
-                        'displayModeBar': True,
-                        'editable': True})
-                    st.plotly_chart(data_plot, config=config)
 
