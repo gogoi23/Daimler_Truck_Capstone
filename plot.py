@@ -88,7 +88,8 @@ Capable of adjusting:
 """
 def update(fig, x_lim=None, y_lim=None, 
            quad1_show=None, quad2_show=None, quad3_show=None, quad4_show=None,
-           x_offsets=None, y_offsets=None, x_gridlines=True, y_gridlines=True):
+           x_offsets=None, y_offsets=None, x_gridlines=True, y_gridlines=True,
+           colors=[]):
     
     if quad1_show is not None:
         fig.update_layout(
@@ -131,9 +132,12 @@ def update(fig, x_lim=None, y_lim=None,
         )
     
     #updates offsets of individual traces
+    index = 0
     for trace, x_off, y_off in zip(fig.data, x_offsets, y_offsets):
         trace['x'] = np.add(trace['x'], x_off)
         trace['y'] = np.add(trace['y'], y_off)
+        trace.line.color = colors[index]
+        index += 1
     return fig
 
 #for testing purposes
