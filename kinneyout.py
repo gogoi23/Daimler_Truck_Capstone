@@ -256,6 +256,25 @@ def customize_plot(fig):
         #options to adjust offsets of each trace/lines
         trace_update = np.array(list(map(partial(adjust_trace, container=st), legends, np.arange(len(legends)))))
 
+        #create color picker widgets to adjust color of lines
+        col1, col2, col3, col4, col5 = st.columns(5)
+        color_select_1 = col1.empty()
+        color_1 = color_select_1.color_picker("Line 0 Color",key='1',value='#636EFA')
+        color_select_2 = col2.empty()
+        color_2 = color_select_2.color_picker("Line 1 Color",key='2',value='#EF553B')
+        color_select_3 = col3.empty()
+        color_3 = color_select_3.color_picker("Line 2 Color",key='3',value='#00CC96')
+        color_select_4 = col4.empty()
+        color_4 = color_select_4.color_picker("Line 3 Color",key='4',value='#AB63FA')
+        color_select_5 = col5.empty()
+        color_5 = color_select_5.color_picker("Line 4 Color",key='5',value='#FFA15A')
+        
+        color_selectors = [color_select_1,color_select_2,color_select_3,color_select_4,color_select_5]
+        colors = [color_1,color_2,color_3,color_4,color_5]
+
+        for i in range(legends.size,5):
+            color_selectors[i].empty()
+
         #options to add flags to the four quadrants
         col1, col2, col3, col4 = st.columns(4)
         quadrant1_show = col1.checkbox('Show Quadrant I flag', key='quadrant1_show')
@@ -270,6 +289,7 @@ def customize_plot(fig):
                                 quad1_show=quadrant1_show, quad2_show=quadrant2_show,
                                 quad3_show=quadrant3_show, quad4_show=quadrant4_show,
                                 x_offsets=trace_update[:,0].astype(float), y_offsets=trace_update[:,1].astype(float),
+                                colors=colors,
                                 )
             return new_fig
 
