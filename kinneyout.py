@@ -12,13 +12,23 @@ from functools import partial
 import datetime
 
 import plot
+import csv
 
-# initial page config
-st.set_page_config(
-     page_title="Kinney:Out",
-     layout="wide",
-     initial_sidebar_state="expanded",
-)
+import os
+from streamlit.runtime.scriptrunner import ScriptRunContext, get_script_run_ctx
+from streamlit.elements.form import current_form_id
+
+import tkinter as tk
+from tkinter import ttk
+from tkinter import filedialog as fd
+
+# Set up tkinter
+root = tk.Tk()
+root.withdraw()
+
+# Make folder picker dialog appear on top of other windows
+root.wm_attributes('-topmost', 1)
+
 
 #converting a list to a string for filenames
 def listToString(s):
@@ -28,10 +38,59 @@ def listToString(s):
         str1 = str1 + "__" + x
     return str1
 
+#this checks if a dictionary has an element. 
+def checkIfBlank(Dict,inputString):
+    if (Dict[inputString] == ''):
+        return False
+    else :
+        return True
+
+def remove_duplicate_files(l):
+    for d in l:
+        if d['fn'] not in [d1['fn'] for d1 in st.session_state.file_list]:
+            st.session_state.file_list.append(d)
+
+
+
+#this the code to do math operations on arrays element wise for the standard plots axises. 
+#current is a dictionary that contains the information about one standard plot
+#standard_plot_DF is a data frame that contains all of a vehicles plots
+#Xdata1 is the name of the first column.
+#xdata2 is the name of the second column that does the math. 
+def mathStandardAxis(current,standard_plot_DF,XData1,XData2):
+    #this extracts the XData1 data from standard_plot_DF and puts it in an np array. 
+    standardXData1Values = np.array(standard_plot_DF.loc[current[XData1][3:]].values)
+    
+    #This checks if the XData2 function is not null. Otherwise it returns standardXData1Values
+    if ( XData2 in current[XData2]):
+        #this extracts the XData2 data from standard_plot_DF and puts it in an np array.
+        standardXData2Values = np.array(standard_plot_DF.loc[current[XData2][3:]].values)        
+        
+        #this code does the actual operations on the arrays. 
+        if(current['XOperation'] == "Sum"):
+            return np.add(standardXData1Values, standardXData2Values) 
+        
+        elif(current['XOperation'] == "Difference"):
+            return np.subtract(standardXData1Values, standardXData2Values) 
+                    
+        elif (current['XOperation'] == "Mutliplication"):
+            return np.multiply(standardXData1Values, standardXData2Values)
+                    
+        elif (current['XOperation'] == "Division"):
+            return np.divide(standardXData1Values, standardXData2Values)
+                    
+        elif (current['XOperation'] == "Average"):
+            return_value1 = np.add(standardXData1Values, standardXData2Values) 
+            return return_value1/2
+                    
+    else: 
+        return standardXData1Values
+
 #parse filename to get vehicle descriptor -- return a dict with names
 def parse_filename(name):
     #removing .csv and splitting name based on '__'
-    rem_type = name.split('.csv')
+    rem_dir = name.rsplit('/', 1)[-1]
+    rem_type = rem_dir.split('.csv')
     str_name = rem_type[0].split('__')
 
     #concatting the seperated strings to give the correct vehicle descriptors
@@ -41,6 +100,7 @@ def parse_filename(name):
     test_load_case = (listToString(str_name[8:]))[2:]
 
     return {"mt": model_template, "tv": test_variant, "tb": test_bench, "lc": test_load_case}
+
 
 #this returns a numpy array of two lists added together 
 def math(df, v, lc, x, y, dataset_math):
@@ -62,11 +122,16 @@ def math(df, v, lc, x, y, dataset_math):
         return_value1 = np.add(axis1, axis2) 
         return_value = return_value1/2
     return return_value
+def get_vehicle(d):
+    return [ x[0] for x in d.index.tolist() ]
 
 #get second index based on df and keyword passed in paramenter, return list
 def get_load_case(d, v):
-    vehicle = [ x for x in d.index.tolist() if x[0] == v ]
-    test_load = [ x[1] for x in vehicle ]
+    if v is None:
+        test_load = [ x[1] for x in d.index.tolist() ]
+    else :
+        vehicle = [ x for x in d.index.tolist() if x[0] == v ]
+        test_load = [ x[1] for x in vehicle ]
 
     return test_load
 
@@ -85,9 +150,8 @@ def create_axis(df, v, tl, a_math, m):
     if len(a_math) == 2:
         #create new axis
         new_axis_vals = math(df, v, tl, a_math[0], a_math[1], m)
-        st.success('New dataset created', icon="✅")
     else:
-        st.error('Please select two datasets to create a new dataset', icon="🚨")
+        return None
 
     #return array of values
     return new_axis_vals
@@ -125,21 +189,35 @@ def check_graph_lc(aad, s, gcv):
     if st.session_state.graph_df.empty:
         st.session_state.load_case = [*set(get_load_case(aad, gcv))]
     else:
-        st.session_state.load_case = [*set(get_load_case(s, gcv))]
+        st.session_state.load_case = [*set(get_load_case(s, None))]
 
 @st.cache
 def convert_df(df):
     # IMPORTANT: Cache the conversion to prevent computation on every rerun
     return df.to_csv().encode('utf-8')
 
-#creates widget/options to offset a given trace/line and change its name in the legends
-def adjust_trace(label, container):
-    col1, col2, col3 = container.columns(3)
-    x_off = col1.number_input(label + ' x-offset', value=0.0)
-    y_off = col2.number_input(label + ' y-offset', value=0.0)
-    legend_name = col3.text_input(label + ' name in legends')
-    return x_off, y_off, legend_name
+#creates widget/options to offset a given trace/line
+def adjust_trace(label, idx, container):
+    col1, col2 = container.columns(2)
+    if idx == 0:
+        x_off = col1.number_input(label + ' x-offset', value=0.0, key=f'{label}{idx}_x-off',
+                                  help="""Offset a line in the x-direction. Each line can have 
+                                  its own x-offset. The widget which changes a given line is 
+                                  labeled with the y-parameter used to create the line. If the 
+                                  legends of the graph are unchanged, the y-parameters for the lines
+                                  can be found there.""")
+        y_off = col2.number_input(label + ' y-offset', value=0.0, key=f'{label}{idx}_y-off',
+                                  help="""Offset a line in the y-direction. Each line can have 
+                                  its own y-offset. The widget which changes a given line is 
+                                  labeled with the y-parameter used to create the line. If the 
+                                  legends of the graph are unchanged, the y-parameters for the lines
+                                  can be found there.""")
+    else:
+        x_off = col1.number_input(label + ' x-offset', value=0.0, key=f'{label}{idx}_x-off')
+        y_off = col2.number_input(label + ' y-offset', value=0.0, key=f'{label}{idx}_y-off')
+    return x_off, y_off
 
+#creates region of the page with all the widgets to customize/adjust the plot
 def customize_plot(fig):
     expander = st.expander('Adjust chart')
     with expander.form(key='update_plot'):
@@ -157,46 +235,39 @@ def customize_plot(fig):
         y_min = float(np.min(y_mins))
         y_max = float(np.max(y_maxs))
         
-        plot_title = st.text_input('Chart title', placeholder='ex. Bump Steer', key='plot_title')
-        
-        col1, col2 = st.columns(2, gap='small')
-        #options to adjust x,y axes title
-        x_axis_title = col1.text_input('X-axis title', key='x_axis_title')
-        y_axis_title = col2.text_input('Y-axis title', key='y_axis_title')
-        
         #options to adjust x-axis bounds
         col1_1, col1_2, col2_1, col2_2 = st.columns(4)
         x_axis_lower = col1_1.number_input('X-axis range', value=x_min, step=0.0001,
-                                        format='%.4f', key='x_axis_lower')
-        x_axis_upper = col1_2.number_input('X-axis upper bound', value=x_max, step=0.0001, 
-                                        format='%.4f', key='x_axis_upper', label_visibility='hidden')
-        if x_axis_upper < x_axis_lower:
-            col1.error('Invalid range', icon="🚨")
+                                        format='%.4f', key='x_axis_lower',
+                                        help="Enter a number to set as the lower bound of the x-axis of the graph.")
+        x_axis_upper = col1_2.number_input(' ', value=x_max, step=0.0001, 
+                                        format='%.4f', key='x_axis_upper', #label_visibility='hidden',
+                                        help="Enter a number to set as the upper bound of the x-axis of the graph.")
         #options to adjust y-axis bounds
         y_axis_lower = col2_1.number_input('Y-axis range', value=y_min, step=0.0001, 
-                                        format='%.4f', key='y_axis_lower')
-        y_axis_upper = col2_2.number_input('Y-axis upper bound', value=y_max, step=0.0001, 
-                                        format='%.4f', key='y_axis_upper', label_visibility='hidden')
-        if y_axis_upper < y_axis_lower:
-            col2.error('Invalid range', icon="🚨")
+                                        format='%.4f', key='y_axis_lower',
+                                        help="Enter a number to set as the lower bound of the y-axis of the graph.")
+        y_axis_upper = col2_2.number_input(' ', value=y_max, step=0.0001, 
+                                        format='%.4f', key='y_axis_upper', #label_visibility='hidden',
+                                        help="Enter a number to set as the upper bound of the y-axis of the graph.")
         x_range = [x_axis_lower, x_axis_upper]
         y_range = [y_axis_lower, y_axis_upper]
-
+        
         #options to adjust offsets of each trace/lines
-        trace_update = np.array(list(map(partial(adjust_trace, container=st), legends)))
+        trace_update = np.array(list(map(partial(adjust_trace, container=st), legends, np.arange(len(legends)))))
 
         #create color picker widgets to adjust color of lines
         col1, col2, col3, col4, col5 = st.columns(5)
         color_select_1 = col1.empty()
-        color_1 = color_select_1.color_picker("0 Color",key='1',value='#636EFA')
+        color_1 = color_select_1.color_picker("Line 0 Color",key='1',value='#636EFA')
         color_select_2 = col2.empty()
-        color_2 = color_select_2.color_picker("1 Line Color",key='2',value='#EF553B')
+        color_2 = color_select_2.color_picker("Line 1 Color",key='2',value='#EF553B')
         color_select_3 = col3.empty()
-        color_3 = color_select_3.color_picker("2 Line Color",key='3',value='#00CC96')
+        color_3 = color_select_3.color_picker("Line 2 Color",key='3',value='#00CC96')
         color_select_4 = col4.empty()
-        color_4 = color_select_4.color_picker("3 Line Color",key='4',value='#AB63FA')
+        color_4 = color_select_4.color_picker("Line 3 Color",key='4',value='#AB63FA')
         color_select_5 = col5.empty()
-        color_5 = color_select_5.color_picker("4 Line Color",key='5',value='#FFA15A')
+        color_5 = color_select_5.color_picker("Line 4 Color",key='5',value='#FFA15A')
         
         color_selectors = [color_select_1,color_select_2,color_select_3,color_select_4,color_select_5]
         colors = [color_1,color_2,color_3,color_4,color_5]
@@ -206,86 +277,160 @@ def customize_plot(fig):
 
         #options to add flags to the four quadrants
         col1, col2, col3, col4 = st.columns(4)
-        quadrant1_title = col1.text_input('Quadrant I', key='quadrant1_title')
-        quadrant2_title = col2.text_input('Quadrant II', key='quadrant2_title')
-        quadrant3_title = col3.text_input('Quadrant III', key='quadrant3_title')
-        quadrant4_title = col4.text_input('Quadrant IV', key='quadrant4_title')
+        quadrant1_show = col1.checkbox('Show Quadrant I flag', key='quadrant1_show')
+        quadrant2_show = col2.checkbox('Show Quadrant II flag', key='quadrant2_show')
+        quadrant3_show = col3.checkbox('Show Quadrant III flag', key='quadrant3_show')
+        quadrant4_show = col4.checkbox('Show Quadrant IV flag', key='quadrant4_show')
         
-            
         submitted = st.form_submit_button('Update chart')
         expander.button('Reset chart', key='reset_chart_button')
         if submitted:
-            new_fig = plot.update(fig, x_lim=x_range, y_lim=y_range, title=plot_title,
-                                x_title=x_axis_title, y_title=y_axis_title,
-                                quad1_title=quadrant1_title, quad2_title=quadrant2_title,
-                                quad3_title=quadrant3_title, quad4_title=quadrant4_title,
+            new_fig = plot.update(fig, x_lim=x_range, y_lim=y_range,
+                                quad1_show=quadrant1_show, quad2_show=quadrant2_show,
+                                quad3_show=quadrant3_show, quad4_show=quadrant4_show,
                                 x_offsets=trace_update[:,0].astype(float), y_offsets=trace_update[:,1].astype(float),
-                                legends=trace_update[:,2],colors=colors)
+                                colors=colors)
             return new_fig
-    
+
     return fig
 
+
+# initial page config
+st.set_page_config(
+     page_title="Kinney:Out",
+     layout="wide",
+     initial_sidebar_state="expanded",
+)
+
 st.title("Welcome to the Kinney:Out Results Viewer")
-uploaded_files = st.file_uploader("Please select .csv files for data.", accept_multiple_files=True, type=['csv'])
+#uploaded_files = st.file_uploader("Please select .csv files for data.", accept_multiple_files=True, type=['csv'])
+
 
 #create a df that is a concationation of all .csv files
 all_df = pd.DataFrame()
 
+#initalize all session state variables
 if 'graph_df' not in st.session_state:
-        st.session_state.graph_df = pd.DataFrame()
+    st.session_state.graph_df = pd.DataFrame()
+if 'uploaded_df' not in st.session_state:
+    st.session_state.uploaded_df = pd.DataFrame()
+if 'vehicle_list' not in st.session_state:
+    st.session_state.vehicle_list = []
+if 'load_case_list' not in st.session_state:
+    st.session_state.load_case_list = []
+if 'file_list' not in st.session_state:
+    st.session_state.file_list = []
 
-#create a list to hold all datasets
-vehicle_list = []
-load_case_list = []
+# Folder picker submit form
+with st.form("file picker"):
+    st.write('_(Optional)_ Input a starting path to browse files:')
+
+    c1, c2 = st.columns([5,1])
+    with c1:
+        #get path by user
+        file_path = st.text_input('Start path:', placeholder="C:\Documents\ ", label_visibility="collapsed")
+
+        #copying path often puts in double quotes, however, path needs to to be without it
+        #removes double quotes from give path if it exists
+        try:
+            file_path = file_path.lstrip('"')
+        except:
+            file_path = file_path
+    with c2:
+        #button to initiate browsing files
+        browse_files_clicked = st.form_submit_button('Browse Files', help="User is able to choose a file path to start browsing files from.")
+
+        if browse_files_clicked:
+            fd_uploaded_files = fd.askopenfiles(master=root, initialdir=file_path, filetypes=[("CSV files","*.csv")])
+
+            temp_all_df = pd.DataFrame()
+            vehicle_list = []
+            load_case_list = []
+            filenames = []
+            
+            #go through all files and add it to a main dataframe
+            for uploaded_file in fd_uploaded_files:
+                #read csv file and convert to df
+                df = pd.read_csv(uploaded_file)
+                
+                #parse the csv file name into a list of four segments
+                file_strings = parse_filename(uploaded_file.name)
+
+                #create a temporary df for manipulation
+                temp_df = df
+
+                #clean up the testbench name
+                temp_df.iloc[:,0] = temp_df.iloc[:,0].str.removeprefix("result/$S_testbench/$RS_Testrig_output/$S_testbench.$X_")
+
+                #add another column based on file and add it to the index to create a MultiIndex
+                temp_df = temp_df.assign(vehicle = file_strings["tv"])
+                temp_df = temp_df.assign(test_load = file_strings["lc"])
+                temp_df.rename({'time':'dataset'}, axis=1, inplace=True)
+                temp_df.set_index(['vehicle','test_load','dataset'], inplace=True)
+
+                #resets all column labels to be 0 to n rather than the time values
+                temp_df.columns = range(temp_df.shape[1])
+
+                #checking if user is adding a repeat dataset
+                for d in st.session_state.file_list:
+                    if d['df'].equals(temp_df):
+                        c1.error('Duplicate file not added: ' + d['fn'], icon="🚨")
+                        break
+                else:
+                    #add temp df to df holding all df's and files in session state
+                    temp_all_df = pd.concat([temp_all_df, temp_df])
+
+                    filename = (uploaded_file.name).rsplit('/', 1)[-1]
+                    filenames.append({"fn":filename, "df":temp_df})
+                continue
+            
+            #assigns variables to session state to be used even if the page reloads
+            if not temp_all_df.empty:
+                st.session_state.uploaded_df = pd.concat([st.session_state.uploaded_df, temp_all_df]).drop_duplicates(keep="first")
+                remove_duplicate_files(filenames)
+                c1.success('File(s) added: ' + str([d['fn'] for d in filenames]), icon="✅")
+
+#file delete form
+#LEAVES ROWS BECAUSE DATA IS EXACT SAME FROM VEHICLE A AND B ASK ABOUT
+with st.form("delete files form", clear_on_submit=True):
+    c1, c2 = st.columns([5,1])
+    with c1:
+        files = st.multiselect("delete files",  st.session_state.file_list, label_visibility="collapsed", format_func=lambda x: x['fn'])
+
+    with c2:
+        remove_files = st.form_submit_button('Remove Files', help="Remove files from the set that you are working with")
+
+        if remove_files:
+            for d in files:
+                print(d)
+                st.session_state.uploaded_df = pd.concat([st.session_state.uploaded_df, d['df']]).drop_duplicates(keep=False)
+                st.session_state.file_list = [i for i in st.session_state.file_list if d['fn'] not in i['fn']]
+            st.experimental_rerun()
+        
+            
+
 
 #check whether user has uploaded any files
-if len(uploaded_files) != 0:
+if len(st.session_state.uploaded_df) != 0:
     #if so, run through files and run rest of code
     dataset_list = []
 
-    #go through all files and add it to a main dataframe
-    for uploaded_file in uploaded_files:
-        #read csv file and convert to df
-        df = pd.read_csv(uploaded_file)
+    all_df = st.session_state.uploaded_df
 
-        #parse the csv file name into a list of four segments
-        filenames = parse_filename(uploaded_file.name)
-
-        #add filename to list to choose from
-        vehicle_list.append(filenames['tv'])
-        load_case_list.append(filenames["lc"])
-
-        #create a temporary df for manipulation
-        temp_df = df
-
-        #clean up the testbench name
-        temp_df.iloc[:,0] = temp_df.iloc[:,0].str.removeprefix("result/$S_testbench/$RS_Testrig_output/$S_testbench.$X_")
-
-        #add another column based on file and add it to the index to create a MultiIndex
-        temp_df = temp_df.assign(vehicle = filenames["tv"])
-        temp_df = temp_df.assign(test_load = filenames["lc"])
-        temp_df.rename({'time':'dataset'}, axis=1, inplace=True)
-        temp_df.set_index(['vehicle','test_load','dataset'], inplace=True)
-
-        #add temp df to df holding all df's
-        all_df = pd.concat([all_df, temp_df])
-
-    #resets all column labels to be 0 to n rather than the time values
-    all_df.columns = range(all_df.shape[1])
-
-    #remove duplicated from the each list
-    vehicle_list = [*set(vehicle_list)]
-    load_case_list = [*set(load_case_list)]
+    #print the df of the files we imported -- for testing --
+    #st.write(all_df)
 
     if 'df' not in st.session_state:
         st.session_state.df = pd.DataFrame()
-        
+
     all_axis_df = pd.concat([all_df, st.session_state.df])
 
     graph_tab, dataset_tab, standard_plot_tab = st.sidebar.tabs(["Graph", "Dataset Manipulation", "Standard Plot"])
     
+    #TO DO: CHECK FOR MAX OF 5 GRAPHS
+
     with graph_tab:
-        graph_selected_vehicle = st.selectbox("Select a vehicle", vehicle_list, key="graph_vehicle_select")
+        graph_selected_vehicle = st.selectbox("Select a vehicle", [*set(get_vehicle(all_axis_df))], key="graph_vehicle_select")
         if 'load_case' not in st.session_state:
             st.session_state.load_case = [*set(get_load_case(all_axis_df, graph_selected_vehicle))]
         check_graph_lc(all_axis_df, st.session_state.graph_df, graph_selected_vehicle)
@@ -312,8 +457,8 @@ if len(uploaded_files) != 0:
 
     with dataset_tab:
         #select box widget to choose vehicle dataset
-        selected_vehicle = st.selectbox("Select a vehicle", vehicle_list, key="vehicle_select")
-        selected_lc = st.selectbox("Select a load case", load_case_list, key="lc_select")
+        selected_vehicle = st.selectbox("Select a vehicle", [*set(get_vehicle(all_axis_df))], key="vehicle_select")
+        selected_lc = st.selectbox("Select a load case", [*set(get_load_case(all_axis_df, graph_selected_vehicle))], key="lc_select")
         dataset_list = get_dataset(all_df, selected_vehicle, selected_lc)
 
         #create a list for choose math functions
@@ -330,11 +475,16 @@ if len(uploaded_files) != 0:
             #form sumbit button
             add_ds_submit = st.form_submit_button("Create new dataset")
             if add_ds_submit:
-                #adds to session state and creates row based on math functions
-                add_dataset(all_df, selected_vehicle, selected_lc, dataset_math, math_widget, rename_dataset)
-                #update all_axis_df based on added rows
-                all_axis_df = pd.concat([all_df, st.session_state.df])
+                try:
+                    #adds to session state and creates row based on math functions
+                    add_dataset(all_df, selected_vehicle, selected_lc, dataset_math, math_widget, rename_dataset)
+                    #update all_axis_df based on added rows
+                    all_axis_df = pd.concat([all_df, st.session_state.df])
+                    st.success('New dataset created!', icon="✅")
+                except:
+                    st.error('Error: Dataset not created', icon="🚨")
                 st.experimental_rerun()
+            
 
         #form to delete created dataset
         with st.form("del dataset", clear_on_submit=True):
@@ -356,18 +506,182 @@ if len(uploaded_files) != 0:
                 all_axis_df = pd.concat([all_df, st.session_state.df])
                 st.experimental_rerun()
     with standard_plot_tab:
-        st.write("template")
+        if 'standard_df' not in st.session_state:
+            st.session_state.standard_df = pd.DataFrame()
+        if 'standard_filename' not in st.session_state:
+            st.session_state.standard_filename = ""
+        if 'standard_plot' not in st.session_state:
+            st.session_state.standard_plot = ""
+        with st.form('standard_plot_file'):
+            #get path by user
+            standard_file_path = st.text_input('Start path:', placeholder="C:\Documents\ ", label_visibility="collapsed")
+            standard_file_clicked = st.form_submit_button('Add Standard Plot File', help="User is able to choose a file path to get standard plot file.")
+
+            if standard_file_clicked:
+                uploaded_file = fd.askopenfile(master=root, initialdir=standard_file_path, filetypes=[("CSV files","*.csv")])
+
+                st.session_state.standard_filename = uploaded_file.name
+                st.session_state.standard_df = pd.read_csv(uploaded_file, keep_default_na=False)
+        
+        st.write("Chosen Standard Plot File: " + st.session_state.standard_filename)
+
+        st.write(st.session_state.standard_df)
+
+        #select box widget to choose vehicle dataset
+        standard_selected_vehicle = st.selectbox("Select a vehicle", [*set(get_vehicle(all_axis_df))], key="standard_vehicle_select")
+        standard_df = st.session_state.standard_df
+        standard_df = standard_df.reset_index() 
+
+        if not standard_df.empty:
+            # this is an array of dictionaries. Each dictionary will contain all
+            # all the information about one of the standard plots. 
+            standard_plots = [] 
+            standard_plot_names = [None]
+
+            #iterate through each row in the csv file/df
+            for index, line in standard_df.iterrows():
+                #this is the actual dictionary that will get added to the standard plots array.
+                #this contains all the actual data for a single standard plot
+                standard_plot ={
+                    "title" : line['Characteristic'],
+                    "xTitle" : line['X Title'],
+                    "yTitle" : line['Y Title'],
+                    "DataFile": line['Data File'],
+                    "XData1" : line['X Data1'],
+                    "XData2" : line['X Data2'],
+                    "XOperation": line['X Operation'],
+                    "XOffset": line['X Offset'],
+                    "YData1" : line['Y Data1'],
+                    "YData2" : line['Y Data2'],
+                    "YOperation": line['Y Operation'],
+                    "YOffset": line['Y Offset'],
+                    "StandardLinearMin" : line['Standard Linear Min'],
+                    "StandardLinearMax" : line['Standard Linear Max'],
+                    "Quad1Flag" : line['Quad1 Flag'],
+                    "Quad2Flag" : line['Quad2 Flag'],
+                    "Quad3Flag" : line['Quad3 Flag'],
+                    "Quad4Flag" : line['Quad4 Flag'],
+                    
+                }
+                #this adds the standard plot the standard_plots array 
+                standard_plots.append(standard_plot)
+                standard_plot_names.append(standard_plot['title'])
+
+            #selectbox to choose plot to grpah based off to csv file titles
+            standard_plot_selector = st.selectbox("Choose a standard plot to plot: ", standard_plot_names)
+
+            #go through all the standard plot axises. 
+            for current in standard_plots:
+                #user can select to not show any plot
+                if standard_plot_selector is None:
+                    st.session_state.standard_plot = ""
+                    break
+                #graph is drawn based on selected plot
+                if current['title'] == standard_plot_selector:
+                    if current['DataFile'] in get_load_case(all_df, standard_selected_vehicle):
+
+                        #this gets the data from a data frame that contains all the files into
+                        # into a data frame that only contains file that matches with current['datafile']
+                        try:
+                            # some of the vehicles files are named lateral while some are named fa__lateral
+                            # this try block accounts for all of that 
+                            standard_plot_DF = all_df.loc[standard_selected_vehicle].loc[current['DataFile']]
+                        except: 
+                            if current['DataFile'] == 'lateral':
+                                standard_plot_DF = all_df.loc[standard_selected_vehicle].loc['fa__lateral']
+                            
+                        #these are the xvalues and yvalues put into a numpy array. See the 
+                        #mathStandardAxis code for more details. 
+                        xAxisValues = mathStandardAxis(current,standard_plot_DF,"XData1","XData2")
+                        yAxisValues = mathStandardAxis(current,standard_plot_DF,"YData1","YData2")
+
+                        #these are the x and yaxises. They will take all the values in xAxisValues and yAxisValues
+                        #and account for the linear min and max 
+                        trimmedXAxis = []
+                        trimmedYAxis = []
+
+                        #this is the standard linear max and min. It starts out being the yaxise's min and max
+                        #values. 
+                        stdLinMax = max(yAxisValues)
+                        stdLinMin = min(yAxisValues)
+
+                        #if the plot has a standard linear max or min the values above get changed to account for 
+                        # that. Otherwise trimmed x and y axis just become copies of xAxisValues and yAxisValues. 
+                        if (current["StandardLinearMin"] != ''):
+                            stdLinMin = current['StandardLinearMin']
+                        
+                        if (current["StandardLinearMax"] != ''):
+                            stdLinMax = current['StandardLinearMax']
+
+                        #this is the data plot that gets graphed 
+                        data_plot = plot.plot(
+                            [xAxisValues,yAxisValues],
+                            title = current['title'],
+                            y_title = current['yTitle'],
+                            x_title = current['xTitle'],
+                            quad1_title = current['Quad1Flag'],
+                            quad2_title = current['Quad2Flag'],
+                            quad3_title = current['Quad3Flag'],
+                            quad4_title = current['Quad4Flag']                 
+                        )
+
+                        #this sets the x and y offests 
+                        x_offsetValue = 0
+                        y_offsetValue = 0
+                        if checkIfBlank(current,'XOffset'):
+                            x_offsetValue = current['XOffset']
+                        if checkIfBlank(current,'YOffset'):
+                            y_offsetValue = current['YOffset']
+                    
+
+                        #this sets the offests,quadrant flags, and x and ytitles. 
+                        data_plot = plot.update(data_plot,
+                            x_offsets = [x_offsetValue],
+                            y_offsets = [y_offsetValue]
+                        )
+
+                        #return the data plot to be graphed on the main page rather than side bar
+                        st.session_state.standard_plot = data_plot
+                        st.success('Standard Plot created!', icon="✅")
+                    else:
+                        st.error('Error: Dataset not uploaded to plot', icon="🚨")
+        
+        #give a warning that standard plot won't show unless other graph is cleared
+        if st.session_state.standard_plot != "" and st.session_state.graph_df.empty == False:
+            st.warning("Don't see your standard plot? Try clearing the main graph first.", icon="⚠️")
+
+    #plot the standard plot if there is no graph on other tab
+    if st.session_state.standard_plot != "" and st.session_state.graph_df.empty:
+        config = dict({'scrollZoom': True,
+                            'displayModeBar': True,
+                            'editable': True})
+        new_data_plot = customize_plot(st.session_state.standard_plot)
+        st.plotly_chart(new_data_plot, use_container_width=False, config=config)
+
     #make plot using user-selected rows of data. 
     if st.session_state.graph_df.empty == False:
-        data_plot = plot.plot(st.session_state.graph_df)
-        new_data_plot = customize_plot(data_plot)
-        st.plotly_chart(new_data_plot, use_container_width=True)
-        st.write(st.session_state.graph_df) 
-    
-    #st.write(st.session_state.df)
-    #st.write(all_axis_df)  
-       
 
+        indices = np.array(st.session_state.graph_df.index)
+        index_legends = []
+        for tup in indices[np.arange(1, len(indices),2)]:
+            index_legends = np.append(index_legends, tup[2])
+            
+        data_plot = plot.plot(st.session_state.graph_df, legends=index_legends, 
+                              x_title=(indices[0])[2], y_title=(indices[1])[2],
+                              title=(indices[1])[2]+' vs '+(indices[0])[2])
+
+        new_data_plot = customize_plot(data_plot)
+        
+        #Plotly chart configurations
+        config = dict({'scrollZoom': True,
+                   'displayModeBar': True,
+                   'editable': True})
+        
+        st.plotly_chart(new_data_plot, use_container_width=False, config=config)
+        
+        
+        #export dataset as csv
+        st.write(st.session_state.graph_df)
         graph_csv = convert_df(st.session_state.graph_df)
         col1, col2 = st.columns([3, 1])
         with col1:
