@@ -190,6 +190,28 @@ def convert_df(df):
     # IMPORTANT: Cache the conversion to prevent computation on every rerun
     return df.to_csv().encode('utf-8')
 
+def linearization():
+    with st.form(key="linearization_menu"):
+        parameter = st.selectbox(label="linearization selectbox", options=st.session_state.graph_df_indices, 
+                     index=0, key="linearization_data_select", label_visibility="collapsed")
+        lower_bound = st.number_input("Min value: ")
+        upper_bound = st.number_input("Max value: ")
+        
+        submitted = st.form_submit_button("Enter")
+        if submitted:
+            idx = np.where(st.session_state.graph_df_indices==parameter)[0][0]
+            X = np.array(st.session_state.new_graph_df.iloc[2*idx])
+            Y = np.array(st.session_state.new_graph_df.iloc[2*idx+1])
+            
+            new_series, _ = np.polynomial.polynomial.Polynomial.fit(X[(X>lower_bound) & (X<upper_bound)], Y[(X>lower_bound) & (X<upper_bound)], deg=1)
+            
+            return new_series
+
+def update_new_graph_df(x_offsets, y_offsets):
+    for i, (x_off, y_off) in enumerate(zip(x_offsets, y_offsets)):
+        st.session_state["new_graph_df"].iloc[2*i] = st.session_state.graph_df.iloc[2*i] + x_off
+        st.session_state["new_graph_df"].iloc[2*i+1] = st.session_state.graph_df.iloc[2*i+1] + y_off
+
 #creates widget/options to offset a given trace/line
 def adjust_trace(label, idx, container):
     col1, col2 = container.columns(2)
@@ -258,8 +280,10 @@ def customize_plot(fig):
         quadrant4_show = col4.checkbox('Show Quadrant IV flag', key='quadrant4_show')
         
         submitted = st.form_submit_button('Update chart')
-        expander.button('Reset chart', key='reset_chart_button')
+        if expander.button('Reset chart', key='reset_chart_button'):
+            st.session_state.new_graph_df = st.session_state.graph_df.copy()
         if submitted:
+            update_new_graph_df(trace_update[:,0].astype(float), trace_update[:,1].astype(float))
             new_fig = plot.update(fig, x_lim=x_range, y_lim=y_range,
                                 quad1_show=quadrant1_show, quad2_show=quadrant2_show,
                                 quad3_show=quadrant3_show, quad4_show=quadrant4_show,
@@ -510,9 +534,13 @@ if len(st.session_state.uploaded_df) != 0:
     if st.session_state.graph_df.empty == False:
 
         indices = np.array(st.session_state.graph_df.index)
+        st.session_state["new_graph_df"] = st.session_state.graph_df.copy()
+        
         index_legends = []
         for tup in indices[np.arange(1, len(indices),2)]:
             index_legends = np.append(index_legends, tup[2])
+            
+        st.session_state["graph_df_indices"] = index_legends
             
         data_plot = plot.plot(st.session_state.graph_df, legends=index_legends, 
                               x_title=(indices[0])[2], y_title=(indices[1])[2],
@@ -526,7 +554,11 @@ if len(st.session_state.uploaded_df) != 0:
                    'editable': True})
         
         st.plotly_chart(new_data_plot, use_container_width=False, config=config)
+        
+        slope1 = linearization()
+        st.write("slope", slope1)
         st.write(st.session_state.graph_df)
+        st.write(st.session_state.new_graph_df)
 
         graph_csv = convert_df(st.session_state.graph_df)
         col1, col2 = st.columns([3, 1])
