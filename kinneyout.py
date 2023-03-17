@@ -194,43 +194,57 @@ def linearization():
     with st.form(key="linearization_menu"):
         parameter = st.selectbox(label="linearization selectbox", options=st.session_state.graph_df_indices, 
                      index=0, key="linearization_data_select", label_visibility="collapsed")
-        lower_bound = st.number_input("Min value: ")
-        upper_bound = st.number_input("Max value: ")
+        lower_bound = st.number_input("Min value: ", value=0.0, step=0.0001, 
+                                  format='%.4f', key=f'linearization_lower_x')
+        upper_bound = st.number_input("Max value: ", value=0.0, step=0.0001, 
+                                  format='%.4f', key=f'linearization_upper_x')  
         
         submitted = st.form_submit_button("Enter")
         if submitted:
             idx = np.where(st.session_state.graph_df_indices==parameter)[0][0]
             X = np.array(st.session_state.new_graph_df.iloc[2*idx])
-            Y = np.array(st.session_state.new_graph_df.iloc[2*idx+1])
+            Y = np.array(st.session_state.new_graph_df.iloc[2*idx+1])[(X>lower_bound) & (X<upper_bound)]
+            X = X[(X>lower_bound) & (X<upper_bound)]
             
-            new_series, _ = np.polynomial.polynomial.Polynomial.fit(X[(X>lower_bound) & (X<upper_bound)], Y[(X>lower_bound) & (X<upper_bound)], deg=1)
+            if X.size == 0 or Y.size == 0: 
+                st.error("Please select a range with data.", icon="🚨")
+                print(f'X: {X}')
+                print(f'Y: {Y}')
+            else:
+                return np.polyfit(X, Y, 1)[0]
             
-            return new_series
-
+#modifies new_graph_df with offsets from customization menu
 def update_new_graph_df(x_offsets, y_offsets):
     for i, (x_off, y_off) in enumerate(zip(x_offsets, y_offsets)):
-        st.session_state["new_graph_df"].iloc[2*i] = st.session_state.graph_df.iloc[2*i] + x_off
-        st.session_state["new_graph_df"].iloc[2*i+1] = st.session_state.graph_df.iloc[2*i+1] + y_off
+        st.session_state.new_graph_df.iloc[2*i] = st.session_state.graph_df.iloc[2*i] + x_off
+        st.session_state.new_graph_df.iloc[2*i+1] = st.session_state.graph_df.iloc[2*i+1] + y_off
+
+#copies graph_df into new_graph_df
+def reset_new_graph_df():
+    st.session_state.new_graph_df = st.session_state.graph_df.copy()
 
 #creates widget/options to offset a given trace/line
 def adjust_trace(label, idx, container):
     col1, col2 = container.columns(2)
+    #only add tooltop to first row of widgets
     if idx == 0:
-        x_off = col1.number_input(label + ' x-offset', value=0.0, key=f'{label}{idx}_x-off',
+        x_off = col1.number_input(label + ' x-offset', value=0.0, step=0.0001, 
+                                  format='%.4f', key=f'{label}{idx}_x-off',
                                   help="""Offset a line in the x-direction. Each line can have 
                                   its own x-offset. The widget which changes a given line is 
                                   labeled with the y-parameter used to create the line. If the 
                                   legends of the graph are unchanged, the y-parameters for the lines
                                   can be found there.""")
-        y_off = col2.number_input(label + ' y-offset', value=0.0, key=f'{label}{idx}_y-off',
+        y_off = col2.number_input(label + ' y-offset', value=0.0, step=0.0001, 
+                                  format='%.4f', key=f'{label}{idx}_y-off',
                                   help="""Offset a line in the y-direction. Each line can have 
                                   its own y-offset. The widget which changes a given line is 
                                   labeled with the y-parameter used to create the line. If the 
                                   legends of the graph are unchanged, the y-parameters for the lines
                                   can be found there.""")
     else:
-        x_off = col1.number_input(label + ' x-offset', value=0.0, key=f'{label}{idx}_x-off')
-        y_off = col2.number_input(label + ' y-offset', value=0.0, key=f'{label}{idx}_y-off')
+        x_off = col1.number_input(label + ' x-offset', value=0.0, step=0.0001, key=f'{label}{idx}_x-off')
+        y_off = col2.number_input(label + ' y-offset', value=0.0, step=0.0001, key=f'{label}{idx}_y-off')
     return x_off, y_off
 
 #creates region of the page with all the widgets to customize/adjust the plot
@@ -281,7 +295,7 @@ def customize_plot(fig):
         
         submitted = st.form_submit_button('Update chart')
         if expander.button('Reset chart', key='reset_chart_button'):
-            st.session_state.new_graph_df = st.session_state.graph_df.copy()
+            reset_new_graph_df()
         if submitted:
             update_new_graph_df(trace_update[:,0].astype(float), trace_update[:,1].astype(float))
             new_fig = plot.update(fig, x_lim=x_range, y_lim=y_range,
@@ -318,6 +332,8 @@ all_df = pd.DataFrame()
 #initalize all session state variables
 if 'graph_df' not in st.session_state:
     st.session_state.graph_df = pd.DataFrame()
+if 'new_graph_df' not in st.session_state:
+    st.session_state.new_graph_df = st.session_state.graph_df.copy()
 if 'uploaded_df' not in st.session_state:
     st.session_state.uploaded_df = pd.DataFrame()
 if 'vehicle_list' not in st.session_state:
@@ -534,7 +550,6 @@ if len(st.session_state.uploaded_df) != 0:
     if st.session_state.graph_df.empty == False:
 
         indices = np.array(st.session_state.graph_df.index)
-        st.session_state["new_graph_df"] = st.session_state.graph_df.copy()
         
         index_legends = []
         for tup in indices[np.arange(1, len(indices),2)]:
@@ -556,7 +571,8 @@ if len(st.session_state.uploaded_df) != 0:
         st.plotly_chart(new_data_plot, use_container_width=False, config=config)
         
         slope1 = linearization()
-        st.write("slope", slope1)
+        if slope1:
+            st.write("Slope: ", round(slope1, 4))
         st.write(st.session_state.graph_df)
         st.write(st.session_state.new_graph_df)
 

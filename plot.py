@@ -1,6 +1,7 @@
 import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
+import streamlit as st
 #import plotly.express as px
 #from plotly.subplots import make_subplots
 
@@ -15,6 +16,7 @@ Data should be in DataFrame with rows as seen below:
 |line2_y | [...]
 |...
 """
+@st.cache
 def plot(data, x_lim=None, y_lim=None, title=None,
          x_title=None, y_title=None, legends=None,
          quad1_title=None, quad2_title=None, 
@@ -86,6 +88,7 @@ Capable of adjusting:
 -annotation/quadrant flag visibility
 -x and y-directional offsets for individual traces/lines
 """
+@st.cache
 def update(fig, x_lim=None, y_lim=None, 
            quad1_show=None, quad2_show=None, quad3_show=None, quad4_show=None,
            x_offsets=None, y_offsets=None, x_gridlines=True, y_gridlines=True):
