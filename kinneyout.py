@@ -22,14 +22,6 @@ import tkinter as tk
 from tkinter import ttk
 from tkinter import filedialog as fd
 
-# Set up tkinter
-root = tk.Tk()
-root.withdraw()
-
-# Make folder picker dialog appear on top of other windows
-root.wm_attributes('-topmost', 1)
-
-
 #converting a list to a string for filenames
 def listToString(s):
     # initialize an empty string
@@ -45,10 +37,11 @@ def checkIfBlank(Dict,inputString):
     else :
         return True
 
-def remove_duplicate_files(l):
-    for d in l:
-        if d['fn'] not in [d1['fn'] for d1 in st.session_state.file_list]:
-            st.session_state.file_list.append(d)
+#remove duplicate files and add to session state
+def remove_duplicate_files(list):
+    for fn in list:
+        if fn not in st.session_state.file_list:
+            st.session_state.file_list.append(fn)
 
 
 
@@ -258,6 +251,15 @@ def customize_plot(fig):
     return fig
 
 
+#START OF MAIN CODE
+
+# Set up tkinter
+root = tk.Tk()
+root.withdraw()
+
+# Make folder picker dialog appear on top of other windows
+root.wm_attributes('-topmost', 1)
+
 # initial page config
 st.set_page_config(
      page_title="Kinney:Out",
@@ -265,9 +267,8 @@ st.set_page_config(
      initial_sidebar_state="expanded",
 )
 
+# set header
 st.title("Welcome to the Kinney:Out Results Viewer")
-#uploaded_files = st.file_uploader("Please select .csv files for data.", accept_multiple_files=True, type=['csv'])
-
 
 #create a df that is a concationation of all .csv files
 all_df = pd.DataFrame()
@@ -283,6 +284,14 @@ if 'load_case_list' not in st.session_state:
     st.session_state.load_case_list = []
 if 'file_list' not in st.session_state:
     st.session_state.file_list = []
+if 'df' not in st.session_state:
+    st.session_state.df = pd.DataFrame()
+if 'standard_df' not in st.session_state:
+    st.session_state.standard_df = pd.DataFrame()
+if 'standard_filename' not in st.session_state:
+    st.session_state.standard_filename = ""
+if 'standard_plot' not in st.session_state:
+    st.session_state.standard_plot = ""
 
 # Folder picker submit form
 with st.form("file picker"):
@@ -291,7 +300,7 @@ with st.form("file picker"):
     c1, c2 = st.columns([5,1])
     with c1:
         #get path by user
-        file_path = st.text_input('Start path:', placeholder="C:\Documents\ ", label_visibility="collapsed")
+        file_path = st.text_input('Start path:', value = " ", label_visibility="collapsed")
 
         #copying path often puts in double quotes, however, path needs to to be without it
         #removes double quotes from give path if it exists
@@ -304,6 +313,7 @@ with st.form("file picker"):
         browse_files_clicked = st.form_submit_button('Browse Files', help="User is able to choose a file path to start browsing files from.")
 
         if browse_files_clicked:
+            #makes sure uploaded files are in csv format
             fd_uploaded_files = fd.askopenfiles(master=root, initialdir=file_path, filetypes=[("CSV files","*.csv")])
 
             temp_all_df = pd.DataFrame()
@@ -318,6 +328,7 @@ with st.form("file picker"):
                 
                 #parse the csv file name into a list of four segments
                 file_strings = parse_filename(uploaded_file.name)
+                file_csv = (uploaded_file.name).rsplit('/', 1)[-1]
 
                 #create a temporary df for manipulation
                 temp_df = df
@@ -335,43 +346,53 @@ with st.form("file picker"):
                 temp_df.columns = range(temp_df.shape[1])
 
                 #checking if user is adding a repeat dataset
-                for d in st.session_state.file_list:
-                    if d['df'].equals(temp_df):
-                        c1.error('Duplicate file not added: ' + d['fn'], icon="🚨")
-                        break
+                if file_csv in st.session_state.file_list:
+                    c1.error('Duplicate file not added: ' + file_csv, icon="🚨")
+                    break
                 else:
                     #add temp df to df holding all df's and files in session state
                     temp_all_df = pd.concat([temp_all_df, temp_df])
-
-                    filename = (uploaded_file.name).rsplit('/', 1)[-1]
-                    filenames.append({"fn":filename, "df":temp_df})
+                    filenames.append(file_csv)
                 continue
             
             #assigns variables to session state to be used even if the page reloads
             if not temp_all_df.empty:
-                st.session_state.uploaded_df = pd.concat([st.session_state.uploaded_df, temp_all_df]).drop_duplicates(keep="first")
+                st.session_state.uploaded_df = pd.concat([st.session_state.uploaded_df, temp_all_df])
+                #removes duplicate files and adds to session state
                 remove_duplicate_files(filenames)
-                c1.success('File(s) added: ' + str([d['fn'] for d in filenames]), icon="✅")
+                c1.success('File(s) added: ' + str([f for f in filenames]), icon="✅")
 
 #file delete form
-#LEAVES ROWS BECAUSE DATA IS EXACT SAME FROM VEHICLE A AND B ASK ABOUT
-with st.form("delete files form", clear_on_submit=True):
+with st.container():
     c1, c2 = st.columns([5,1])
+    files_to_remove = {}
     with c1:
-        files = st.multiselect("delete files",  st.session_state.file_list, label_visibility="collapsed", format_func=lambda x: x['fn'])
+        #list the files that were added in a checkbox format
+        for i, f_list in enumerate(st.session_state.file_list):
+            files_to_remove[f_list] = st.checkbox(label=f'{f_list}', key=i)
 
     with c2:
-        remove_files = st.form_submit_button('Remove Files', help="Remove files from the set that you are working with")
+        #check if files have been added
+        if len(st.session_state.file_list) != 0:
+            #only show remove button if there are files that exist
+            #otherwise, button removes selected files
+            remove_files = st.button('Remove Files', help="Remove files from the set that you are working with")
 
-        if remove_files:
-            for d in files:
-                print(d)
-                st.session_state.uploaded_df = pd.concat([st.session_state.uploaded_df, d['df']]).drop_duplicates(keep=False)
-                st.session_state.file_list = [i for i in st.session_state.file_list if d['fn'] not in i['fn']]
-            st.experimental_rerun()
-        
-            
+            #if the button is clicked
+            if remove_files:
+                #iterate through to checkboxes
+                for x in files_to_remove.keys():
+                    #if the check box is checked
+                    if files_to_remove.get(x):
+                        #get the vehicle and load case from the file list
+                        fn = parse_filename(x)
 
+                        #drop the rows that have the same vehicle and load case as the selected file to remove
+                        st.session_state.uploaded_df.drop((fn['tv'], fn ['lc']), axis=0, inplace=True)
+                        #remove the file that was removed from the file list
+                        st.session_state.file_list = [i for i in st.session_state.file_list if x not in i]
+                #rerun the app to show the updated file list        
+                st.experimental_rerun()
 
 #check whether user has uploaded any files
 if len(st.session_state.uploaded_df) != 0:
@@ -382,9 +403,6 @@ if len(st.session_state.uploaded_df) != 0:
 
     #print the df of the files we imported -- for testing --
     #st.write(all_df)
-
-    if 'df' not in st.session_state:
-        st.session_state.df = pd.DataFrame()
 
     all_axis_df = pd.concat([all_df, st.session_state.df])
 
@@ -469,12 +487,6 @@ if len(st.session_state.uploaded_df) != 0:
                 all_axis_df = pd.concat([all_df, st.session_state.df])
                 st.experimental_rerun()
     with standard_plot_tab:
-        if 'standard_df' not in st.session_state:
-            st.session_state.standard_df = pd.DataFrame()
-        if 'standard_filename' not in st.session_state:
-            st.session_state.standard_filename = ""
-        if 'standard_plot' not in st.session_state:
-            st.session_state.standard_plot = ""
         with st.form('standard_plot_file'):
             #get path by user
             standard_file_path = st.text_input('Start path:', placeholder="C:\Documents\ ", label_visibility="collapsed")
@@ -488,7 +500,8 @@ if len(st.session_state.uploaded_df) != 0:
         
         st.write("Chosen Standard Plot File: " + st.session_state.standard_filename)
 
-        st.write(st.session_state.standard_df)
+        if not st.session_state.standard_df.empty:
+            st.write(st.session_state.standard_df)
 
         #select box widget to choose vehicle dataset
         standard_selected_vehicle = st.selectbox("Select a vehicle", [*set(get_vehicle(all_axis_df))], key="standard_vehicle_select")
