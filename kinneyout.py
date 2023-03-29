@@ -190,7 +190,7 @@ def convert_df(df):
     # IMPORTANT: Cache the conversion to prevent computation on every rerun
     return df.to_csv().encode('utf-8')
 
-def linearization():
+def linearization(fig):
     with st.form(key="linearization_menu"):
         parameter = st.selectbox(label="linearization selectbox", options=st.session_state.graph_df_indices, 
                      index=0, key="linearization_data_select", label_visibility="collapsed")
@@ -211,6 +211,8 @@ def linearization():
                 print(f'X: {X}')
                 print(f'Y: {Y}')
             else:
+                st.session_state.linearize_not_update = True
+                print("hopefully updating plot")
                 return np.polyfit(X, Y, 1)[0]
             
 #modifies new_graph_df with offsets from customization menu
@@ -294,10 +296,13 @@ def customize_plot(fig):
         quadrant4_show = col4.checkbox('Show Quadrant IV flag', key='quadrant4_show')
         
         submitted = st.form_submit_button('Update chart')
+        #if resetting the plot, new_graph_df needs to be reset to graph_df
         if expander.button('Reset chart', key='reset_chart_button'):
             reset_new_graph_df()
         if submitted:
+            #if submitting, new_graph_df needs to be updated with any potential offsets
             update_new_graph_df(trace_update[:,0].astype(float), trace_update[:,1].astype(float))
+            #need to actually update the plot itself
             new_fig = plot.update(fig, x_lim=x_range, y_lim=y_range,
                                 quad1_show=quadrant1_show, quad2_show=quadrant2_show,
                                 quad3_show=quadrant3_show, quad4_show=quadrant4_show,
@@ -342,6 +347,11 @@ if 'load_case_list' not in st.session_state:
     st.session_state.load_case_list = []
 if 'file_list' not in st.session_state:
     st.session_state.file_list = []
+    
+if 'linearize_not_update' not in st.session_state:
+    st.session_state.linearize_not_update = False
+if 'display_fig' not in st.session_state:
+    st.session_state.display_fig = None
 
 # Folder picker submit form
 with st.form("file picker"):
@@ -548,29 +558,40 @@ if len(st.session_state.uploaded_df) != 0:
 
     #make plot using user-selected rows of data. 
     if st.session_state.graph_df.empty == False:
-
-        indices = np.array(st.session_state.graph_df.index)
+        #copy graph_df to new_graph_df
+        st.session_state.new_graph_df = st.session_state.graph_df.copy()
         
+        #getting the names of the y-parameters to use as legends in the plot
+        indices = np.array(st.session_state.graph_df.index)
         index_legends = []
         for tup in indices[np.arange(1, len(indices),2)]:
             index_legends = np.append(index_legends, tup[2])
-            
         st.session_state["graph_df_indices"] = index_legends
-            
+        
+        #initial construction of the plot given graph_df
         data_plot = plot.plot(st.session_state.graph_df, legends=index_legends, 
                               x_title=(indices[0])[2], y_title=(indices[1])[2],
                               title=(indices[1])[2]+' vs '+(indices[0])[2])
-
+        
+        slope1 = linearization(st.session_state.display_fig)
+        
+        #construct new plot with user input, also updates new_graph_df to represent data shown in new plot
         new_data_plot = customize_plot(data_plot)
+        if not st.session_state.linearize_not_update:        
+            st.session_state.display_fig = new_data_plot
+            print('updating fig')
+        else:
+            st.session_state.linearize_not_update = False
+            print('did not update fig')
         
         #Plotly chart configurations
         config = dict({'scrollZoom': True,
                    'displayModeBar': True,
                    'editable': True})
         
-        st.plotly_chart(new_data_plot, use_container_width=False, config=config)
+        st.plotly_chart(st.session_state.display_fig, use_container_width=False, config=config)
         
-        slope1 = linearization()
+        #slope1 = linearization(st.session_state.display_fig)
         if slope1:
             st.write("Slope: ", round(slope1, 4))
         st.write(st.session_state.graph_df)
