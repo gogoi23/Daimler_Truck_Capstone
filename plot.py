@@ -136,7 +136,8 @@ def update(fig, x_lim=None, y_lim=None,
     for trace, x_off, y_off in zip(fig.data, x_offsets, y_offsets):
         trace['x'] = np.add(trace['x'], x_off)
         trace['y'] = np.add(trace['y'], y_off)
-        trace.line.color = colors[index]
+        if len(colors) != 0:
+            trace.line.color = colors[index]
         index += 1
     return fig
 
