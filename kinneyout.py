@@ -446,7 +446,7 @@ if len(st.session_state.uploaded_df) != 0:
     graph_tab, dataset_tab, standard_plot_tab = st.sidebar.tabs(["Graph", "Dataset Manipulation", "Standard Plot"])
 
     with graph_tab:
-        #keeping track of number of grpahs
+        #keeping track of number of graphs
 
         graph_selected_vehicle = st.selectbox("Select a vehicle", [*set(get_vehicle(all_axis_df))], key="graph_vehicle_select")
         if 'load_case' not in st.session_state:
