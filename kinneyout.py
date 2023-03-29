@@ -190,10 +190,15 @@ def convert_df(df):
     # IMPORTANT: Cache the conversion to prevent computation on every rerun
     return df.to_csv().encode('utf-8')
 
-def linearization(fig):
-    with st.form(key="linearization_menu"):
+#Creates region of the page with all the widgets to linearize the data.
+#The user will select which line to linearize and define an x-range
+#of data to linearize
+def linearization(container):
+    with container.form(key="linearization_menu"):
+        #widgets to select which line to linearize
         parameter = st.selectbox(label="linearization selectbox", options=st.session_state.graph_df_indices, 
                      index=0, key="linearization_data_select", label_visibility="collapsed")
+        #widgets to define x-range to linearize
         lower_bound = st.number_input("Min value: ", value=0.0, step=0.0001, 
                                   format='%.4f', key=f'linearization_lower_x')
         upper_bound = st.number_input("Max value: ", value=0.0, step=0.0001, 
@@ -201,18 +206,17 @@ def linearization(fig):
         
         submitted = st.form_submit_button("Enter")
         if submitted:
+            #linearize (finding the slope) of the line selected within the x-range selected
             idx = np.where(st.session_state.graph_df_indices==parameter)[0][0]
             X = np.array(st.session_state.new_graph_df.iloc[2*idx])
             Y = np.array(st.session_state.new_graph_df.iloc[2*idx+1])[(X>lower_bound) & (X<upper_bound)]
             X = X[(X>lower_bound) & (X<upper_bound)]
             
+            #report error if the range contains no data
             if X.size == 0 or Y.size == 0: 
                 st.error("Please select a range with data.", icon="🚨")
-                print(f'X: {X}')
-                print(f'Y: {Y}')
             else:
                 st.session_state.linearize_not_update = True
-                print("hopefully updating plot")
                 return np.polyfit(X, Y, 1)[0]
             
 #modifies new_graph_df with offsets from customization menu
@@ -225,7 +229,9 @@ def update_new_graph_df(x_offsets, y_offsets):
 def reset_new_graph_df():
     st.session_state.new_graph_df = st.session_state.graph_df.copy()
 
-#creates widget/options to offset a given trace/line
+#Creates widget/options to offset a given trace/line.
+#Will be called multiple times by customize_plot() for 
+#each line of the current plot
 def adjust_trace(label, idx, container):
     col1, col2 = container.columns(2)
     #only add tooltop to first row of widgets
@@ -249,10 +255,11 @@ def adjust_trace(label, idx, container):
         y_off = col2.number_input(label + ' y-offset', value=0.0, step=0.0001, key=f'{label}{idx}_y-off')
     return x_off, y_off
 
-#creates region of the page with all the widgets to customize/adjust the plot
-def customize_plot(fig):
-    expander = st.expander('Adjust chart')
-    with expander.form(key='update_plot'):
+#Creates region of the page with all the widgets to customize/adjust the plot.
+#The user can set the x-range and y-range of the plot, offset individual lines
+#in the x- or y-direction, display or hide flags, or recolor a line.
+def customize_plot(fig, container):
+    with container.form(key='update_plot'):
         #getting current axes ranges of the plot
         x_mins, x_maxs, y_mins, y_maxs = [], [], [], []
         legends = []
@@ -267,7 +274,7 @@ def customize_plot(fig):
         y_min = float(np.min(y_mins))
         y_max = float(np.max(y_maxs))
         
-        #options to adjust x-axis bounds
+        #widgets to adjust x-axis bounds
         col1_1, col1_2, col2_1, col2_2 = st.columns(4)
         x_axis_lower = col1_1.number_input('X-axis range', value=x_min, step=0.0001,
                                         format='%.4f', key='x_axis_lower',
@@ -285,10 +292,10 @@ def customize_plot(fig):
         x_range = [x_axis_lower, x_axis_upper]
         y_range = [y_axis_lower, y_axis_upper]
         
-        #options to adjust offsets of each trace/lines
+        #widgets to adjust offsets of each trace/lines
         trace_update = np.array(list(map(partial(adjust_trace, container=st), legends, np.arange(len(legends)))))
 
-        #options to add flags to the four quadrants
+        #widgets to add flags to the four quadrants
         col1, col2, col3, col4 = st.columns(4)
         quadrant1_show = col1.checkbox('Show Quadrant I flag', key='quadrant1_show')
         quadrant2_show = col2.checkbox('Show Quadrant II flag', key='quadrant2_show')
@@ -297,7 +304,7 @@ def customize_plot(fig):
         
         submitted = st.form_submit_button('Update chart')
         #if resetting the plot, new_graph_df needs to be reset to graph_df
-        if expander.button('Reset chart', key='reset_chart_button'):
+        if container.button('Reset chart', key='reset_chart_button'):
             reset_new_graph_df()
         if submitted:
             #if submitting, new_graph_df needs to be updated with any potential offsets
@@ -337,6 +344,7 @@ all_df = pd.DataFrame()
 #initalize all session state variables
 if 'graph_df' not in st.session_state:
     st.session_state.graph_df = pd.DataFrame()
+#a new_graph_df session var needed for linearization functionality
 if 'new_graph_df' not in st.session_state:
     st.session_state.new_graph_df = st.session_state.graph_df.copy()
 if 'uploaded_df' not in st.session_state:
@@ -573,16 +581,17 @@ if len(st.session_state.uploaded_df) != 0:
                               x_title=(indices[0])[2], y_title=(indices[1])[2],
                               title=(indices[1])[2]+' vs '+(indices[0])[2])
         
-        slope1 = linearization(st.session_state.display_fig)
+        tab1, tab2 = st.tabs(['Adjust Chart', 'Linearize'])
+        slope1 = linearization(tab2)
+        if slope1:
+            tab2.write(f'Slope: {round(slope1, 4)}')
         
         #construct new plot with user input, also updates new_graph_df to represent data shown in new plot
-        new_data_plot = customize_plot(data_plot)
+        new_data_plot = customize_plot(data_plot, tab1)
         if not st.session_state.linearize_not_update:        
             st.session_state.display_fig = new_data_plot
-            print('updating fig')
         else:
             st.session_state.linearize_not_update = False
-            print('did not update fig')
         
         #Plotly chart configurations
         config = dict({'scrollZoom': True,
@@ -591,11 +600,8 @@ if len(st.session_state.uploaded_df) != 0:
         
         st.plotly_chart(st.session_state.display_fig, use_container_width=False, config=config)
         
-        #slope1 = linearization(st.session_state.display_fig)
-        if slope1:
-            st.write("Slope: ", round(slope1, 4))
         st.write(st.session_state.graph_df)
-        st.write(st.session_state.new_graph_df)
+        #st.write(st.session_state.new_graph_df)
 
         graph_csv = convert_df(st.session_state.graph_df)
         col1, col2 = st.columns([3, 1])
