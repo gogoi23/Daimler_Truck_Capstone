@@ -3,7 +3,7 @@ from cgitb import reset
 from codecs import ignore_errors
 import re
 from select import select
-import matplotlib.pyplot as plt
+import plotly.graph_objects as go
 import pandas as pd
 import numpy as np
 from requests import session
@@ -184,7 +184,7 @@ def check_graph_lc(aad, s, gcv):
     else:
         st.session_state.load_case = [*set(get_load_case(s, None))]
 
-@st.cache
+@st.cache_data
 def convert_df(df):
     # IMPORTANT: Cache the conversion to prevent computation on every rerun
     return df.to_csv().encode('utf-8')
@@ -252,19 +252,19 @@ def customize_plot(fig):
         #create color picker widgets to adjust color of lines
         col1, col2, col3, col4, col5 = st.columns(5)
         color_select_1 = col1.empty()
-        color_1 = color_select_1.color_picker("Line 0 Color",key='1',value='#636EFA')
+        color_1 = color_select_1.color_picker("Line 0 Color",key='color1',value='#636EFA')
         color_select_2 = col2.empty()
-        color_2 = color_select_2.color_picker("Line 1 Color",key='2',value='#EF553B')
+        color_2 = color_select_2.color_picker("Line 1 Color",key='color2',value='#EF553B')
         color_select_3 = col3.empty()
-        color_3 = color_select_3.color_picker("Line 2 Color",key='3',value='#00CC96')
+        color_3 = color_select_3.color_picker("Line 2 Color",key='color3',value='#00CC96')
         color_select_4 = col4.empty()
-        color_4 = color_select_4.color_picker("Line 3 Color",key='4',value='#AB63FA')
+        color_4 = color_select_4.color_picker("Line 3 Color",key='color4',value='#AB63FA')
         color_select_5 = col5.empty()
-        color_5 = color_select_5.color_picker("Line 4 Color",key='5',value='#FFA15A')
+        color_5 = color_select_5.color_picker("Line 4 Color",key='color5',value='#FFA15A')
         
         color_selectors = [color_select_1,color_select_2,color_select_3,color_select_4,color_select_5]
         colors = [color_1,color_2,color_3,color_4,color_5]
-
+ 
         for i in range(legends.size,5):
             color_selectors[i].empty()
 
@@ -285,7 +285,6 @@ def customize_plot(fig):
                                 colors=colors,
                                 )
             return new_fig
-
     return fig
 
 
@@ -445,10 +444,10 @@ if len(st.session_state.uploaded_df) != 0:
     all_axis_df = pd.concat([all_df, st.session_state.df])
 
     graph_tab, dataset_tab, standard_plot_tab = st.sidebar.tabs(["Graph", "Dataset Manipulation", "Standard Plot"])
-    
-    #TO DO: CHECK FOR MAX OF 5 GRAPHS
 
     with graph_tab:
+        #keeping track of number of grpahs
+
         graph_selected_vehicle = st.selectbox("Select a vehicle", [*set(get_vehicle(all_axis_df))], key="graph_vehicle_select")
         if 'load_case' not in st.session_state:
             st.session_state.load_case = [*set(get_load_case(all_axis_df, graph_selected_vehicle))]
@@ -461,18 +460,22 @@ if len(st.session_state.uploaded_df) != 0:
         with col1:
             update_graph = st.button("Add graph",  key="add graph")
             if update_graph:
-                st.session_state.graph_df = create_graph_df(all_axis_df, graph_selected_vehicle, graph_selected_lc, x_axis, y_axis)
-                st.experimental_rerun()
+                if len(st.session_state.graph_df) == 10:
+                    graph_tab.error('Error: Graph not added. Max number of graphs is 5.', icon="🚨")
+                else:
+                    st.session_state.graph_df = create_graph_df(all_axis_df, graph_selected_vehicle, graph_selected_lc, x_axis, y_axis)
+                    graph_tab.success('Graph added!', icon="✅")
+                
         with col2:
             del_graph = st.button("Delete last graph", key="del graph")
             if del_graph:
                 st.session_state.graph_df = st.session_state.graph_df[:-2]
-                st.experimental_rerun()
+                graph_tab.error('Last added graph removed.', icon="🚨")
         with col3:
             del_all_graph = st.button("Clear graph", key="clear graph")
             if del_all_graph:
                 st.session_state.graph_df = pd.DataFrame()
-                st.experimental_rerun()
+                graph_tab.error('All graphs removed.', icon="🚨")
 
     with dataset_tab:
         #select box widget to choose vehicle dataset
@@ -596,13 +599,8 @@ if len(st.session_state.uploaded_df) != 0:
 
                         #this gets the data from a data frame that contains all the files into
                         # into a data frame that only contains file that matches with current['datafile']
-                        try:
-                            # some of the vehicles files are named lateral while some are named fa__lateral
-                            # this try block accounts for all of that 
-                            standard_plot_DF = all_df.loc[standard_selected_vehicle].loc[current['DataFile']]
-                        except: 
-                            if current['DataFile'] == 'lateral':
-                                standard_plot_DF = all_df.loc[standard_selected_vehicle].loc['fa__lateral']
+                        standard_plot_DF = all_df.loc[standard_selected_vehicle].loc[current['DataFile']]
+
                             
                         #these are the xvalues and yvalues put into a numpy array. See the 
                         #mathStandardAxis code for more details. 
@@ -614,11 +612,11 @@ if len(st.session_state.uploaded_df) != 0:
                         trimmedXAxis = []
                         trimmedYAxis = []
 
-                        #this is the standard linear max and min. It starts out being the yaxise's min and max
+                        #this is the standard linear max and min. It starts out being the x-axis's min and max
                         #values. 
-                        stdLinMax = max(yAxisValues)
-                        stdLinMin = min(yAxisValues)
-
+                        stdLinMin = min(xAxisValues)
+                        stdLinMax = max(xAxisValues)
+                        
                         #if the plot has a standard linear max or min the values above get changed to account for 
                         # that. Otherwise trimmed x and y axis just become copies of xAxisValues and yAxisValues. 
                         if (current["StandardLinearMin"] != ''):
@@ -626,6 +624,19 @@ if len(st.session_state.uploaded_df) != 0:
                         
                         if (current["StandardLinearMax"] != ''):
                             stdLinMax = current['StandardLinearMax']
+
+                        #get the indices and values in the range of the linearmin and linearmax values
+                        trimmedIndices = np.where((xAxisValues >= stdLinMin) & (xAxisValues <= stdLinMax))
+                        trimmedXAxis = xAxisValues[trimmedIndices]
+                        trimmedYAxis = yAxisValues[trimmedIndices]
+
+                        #create a line of best fit based on the values found above where a is the slope and b is the y intercept
+                        a, b = np.polyfit(trimmedXAxis, trimmedYAxis, 1)
+
+                        st.write(f"Linearization Value: **{str(a)}**  based on the range " + str(stdLinMin) + " to " + str(stdLinMax))
+                        
+                        #FOR TESTING PURPOSES*** showing the line of best fit
+                        #linearBestFit = go.Line(x=trimmedXAxis,y=a*trimmedXAxis+b,name='Linear Line of Best Fit')
 
                         #this is the data plot that gets graphed 
                         data_plot = plot.plot(
@@ -636,7 +647,8 @@ if len(st.session_state.uploaded_df) != 0:
                             quad1_title = current['Quad1Flag'],
                             quad2_title = current['Quad2Flag'],
                             quad3_title = current['Quad3Flag'],
-                            quad4_title = current['Quad4Flag']                 
+                            quad4_title = current['Quad4Flag'],
+                            legends=[current['title']]             
                         )
 
                         #this sets the x and y offests 
@@ -654,11 +666,14 @@ if len(st.session_state.uploaded_df) != 0:
                             y_offsets = [y_offsetValue]
                         )
 
+                        #FOR TESTING PURPOSES*** showing the line of best fit
+                        #data_plot.add_trace(linearBestFit)
+
                         #return the data plot to be graphed on the main page rather than side bar
                         st.session_state.standard_plot = data_plot
                         st.success('Standard Plot created!', icon="✅")
                     else:
-                        st.error('Error: Dataset not uploaded to plot', icon="🚨")
+                        st.error('Error: Test load case: ' + current['DataFile'] + ' not found in ' + standard_selected_vehicle, icon="🚨")
         
         #give a warning that standard plot won't show unless other graph is cleared
         if st.session_state.standard_plot != "" and st.session_state.graph_df.empty == False:
@@ -674,7 +689,6 @@ if len(st.session_state.uploaded_df) != 0:
 
     #make plot using user-selected rows of data. 
     if st.session_state.graph_df.empty == False:
-
         indices = np.array(st.session_state.graph_df.index)
         index_legends = []
         for tup in indices[np.arange(1, len(indices),2)]:
