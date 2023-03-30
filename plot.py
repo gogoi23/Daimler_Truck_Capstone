@@ -1,26 +1,26 @@
 import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
-import streamlit as st
 #import plotly.express as px
 #from plotly.subplots import make_subplots
 
-"""
-Makes makes singular plot using the first row of data as the x-values
-and the successive rows of data as different lines on same plot
-Data should be in DataFrame with rows as seen below:
-|________________
-|line1_x | [...]
-|line1_y | [...]
-|line2_x | [...]
-|line2_y | [...]
-|...
-"""
 def plot(data, x_lim=None, y_lim=None, title=None,
          x_title=None, y_title=None, legends=None,
          quad1_title=None, quad2_title=None, 
          quad3_title=None, quad4_title=None):
+    """
+    Makes singular plot. Data is passed to function by alternating
+    x- and y-parameters for each line. Data should be in DataFrame 
+    with rows as seen below:
+    |________________
+    |line1_x | [...]
+    |line1_y | [...]
+    |line2_x | [...]
+    |line2_y | [...]
+    |...
+    """
     
+    #manipulate data into numpy array for each of plot construction
     if isinstance(data, pd.DataFrame):
         data = data.values
     data = np.array(data)
@@ -42,12 +42,6 @@ def plot(data, x_lim=None, y_lim=None, title=None,
         yaxis_title=y_title,
         yaxis_range=y_lim
     )
-    
-    # fig.update_yaxes(
-    #     scaleanchor="x",
-    #     scaleratio=2
-    # )
-    #fig['layout'].update(scene=dict(aspectmode="data"))
     
     #add quadrant flags if provided, otherwise set default flags and hide them
     margins = 0.075
@@ -76,21 +70,20 @@ def plot(data, x_lim=None, y_lim=None, title=None,
         opacity=1 if quad4_title is not None else 0
     )
     
-    #fig.show()
     return fig
 
-
-"""
-Update figure with with new customization if provided. 
-Capable of adjusting:
--x and y-axes bounds
--annotation/quadrant flag visibility
--x and y-directional offsets for individual traces/lines
-"""
 def update(fig, x_lim=None, y_lim=None, 
            quad1_show=None, quad2_show=None, quad3_show=None, quad4_show=None,
            x_offsets=None, y_offsets=None, x_gridlines=True, y_gridlines=True):
+    """
+    Update figure with with new customization if provided. 
+    Capable of adjusting:
+    -x and y-axes bounds
+    -annotation/quadrant flag visibility
+    -x- and y-directional offsets for individual traces/lines
+    """
     
+    #update flag visibility
     if quad1_show is not None:
         fig.update_layout(
             annotations=[dict(opacity=1 if quad1_show else 0),
@@ -120,6 +113,7 @@ def update(fig, x_lim=None, y_lim=None,
                          dict(opacity=1 if quad4_show else 0)]
         )
     
+    #update x- and y-axes ranges
     if x_lim is not None:
         fig.update_xaxes(
             range=x_lim,
@@ -141,4 +135,3 @@ def update(fig, x_lim=None, y_lim=None,
 if __name__ == '__main__':
     data = pd.read_csv('.\Kinney_Exchange\Dummy Folder with FA1 results\output\sub_fa__hk_typ1__200415__P4_12p5k_ZZ1513_P__201003__01p00___sub_suspension_kinematics__210528__artic.csv')
     #fig = plot(data.iloc[:,1:], legends=data.iloc[:,0])
-    #plot_px(data, index_as_legends=True)

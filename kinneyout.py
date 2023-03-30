@@ -190,10 +190,31 @@ def convert_df(df):
     # IMPORTANT: Cache the conversion to prevent computation on every rerun
     return df.to_csv().encode('utf-8')
 
-#Creates region of the page with all the widgets to linearize the data.
-#The user will select which line to linearize and define an x-range
-#of data to linearize
+
+@st.cache
+def get_legends():
+    """
+    Iterate through graph_df to get the row names of the y-parameter
+    of each line. These will be used in the legends of the plot.
+
+    Returns the row names found.
+    """
+    
+    #getting the names of the y-parameters to use as legends in the plot
+    indices = np.array(st.session_state.graph_df.index)
+    index_legends = []
+    for tup in indices[np.arange(1, len(indices),2)]:
+        index_legends = np.append(index_legends, tup[2])
+    st.session_state["graph_df_indices"] = index_legends
+    return index_legends
+
 def linearization(container):
+    """
+    Creates region of the page with all the widgets to linearize the data.
+    The user will select which line to linearize and define an x-range
+    of data to linearize
+    """
+    
     with container.form(key="linearization_menu"):
         #widgets to select which line to linearize
         parameter = st.selectbox(label="linearization selectbox", options=st.session_state.graph_df_indices, 
@@ -219,20 +240,24 @@ def linearization(container):
                 st.session_state.linearize_not_update = True
                 return np.polyfit(X, Y, 1)[0]
             
-#modifies new_graph_df with offsets from customization menu
+#Modifies new_graph_df with offsets from customization menu
 def update_new_graph_df(x_offsets, y_offsets):
     for i, (x_off, y_off) in enumerate(zip(x_offsets, y_offsets)):
         st.session_state.new_graph_df.iloc[2*i] = st.session_state.graph_df.iloc[2*i] + x_off
         st.session_state.new_graph_df.iloc[2*i+1] = st.session_state.graph_df.iloc[2*i+1] + y_off
 
-#copies graph_df into new_graph_df
+#Copies graph_df into new_graph_df
 def reset_new_graph_df():
     st.session_state.new_graph_df = st.session_state.graph_df.copy()
 
-#Creates widget/options to offset a given trace/line.
-#Will be called multiple times by customize_plot() for 
-#each line of the current plot
 def adjust_trace(label, idx, container):
+    """
+    Creates widget/options to offset a given trace/line.
+    Will be called multiple times by customize_plot() for 
+    each line of the current plot.
+
+    Returns the user-input x- and y-offsets for the given line.
+    """
     col1, col2 = container.columns(2)
     #only add tooltop to first row of widgets
     if idx == 0:
@@ -255,10 +280,14 @@ def adjust_trace(label, idx, container):
         y_off = col2.number_input(label + ' y-offset', value=0.0, step=0.0001, key=f'{label}{idx}_y-off')
     return x_off, y_off
 
-#Creates region of the page with all the widgets to customize/adjust the plot.
-#The user can set the x-range and y-range of the plot, offset individual lines
-#in the x- or y-direction, display or hide flags, or recolor a line.
 def customize_plot(fig, container):
+    """
+    Creates region of the page with all the widgets to customize/adjust the plot.
+    The user can set the x-range and y-range of the plot, offset individual lines
+    in the x- or y-direction, display or hide flags, or recolor a line.
+
+    Returns the plot with updated axes-ranges, offsets, and flag visibilities
+    """
     with container.form(key='update_plot'):
         #getting current axes ranges of the plot
         x_mins, x_maxs, y_mins, y_maxs = [], [], [], []
@@ -282,7 +311,7 @@ def customize_plot(fig, container):
         x_axis_upper = col1_2.number_input(' ', value=x_max, step=0.0001, 
                                         format='%.4f', key='x_axis_upper', #label_visibility='hidden',
                                         help="Enter a number to set as the upper bound of the x-axis of the graph.")
-        #options to adjust y-axis bounds
+        #widgets to adjust y-axis bounds
         y_axis_lower = col2_1.number_input('Y-axis range', value=y_min, step=0.0001, 
                                         format='%.4f', key='y_axis_lower',
                                         help="Enter a number to set as the lower bound of the y-axis of the graph.")
@@ -303,9 +332,11 @@ def customize_plot(fig, container):
         quadrant4_show = col4.checkbox('Show Quadrant IV flag', key='quadrant4_show')
         
         submitted = st.form_submit_button('Update chart')
+        
         #if resetting the plot, new_graph_df needs to be reset to graph_df
         if container.button('Reset chart', key='reset_chart_button'):
             reset_new_graph_df()
+            
         if submitted:
             #if submitting, new_graph_df needs to be updated with any potential offsets
             update_new_graph_df(trace_update[:,0].astype(float), trace_update[:,1].astype(float))
@@ -337,7 +368,6 @@ root.wm_attributes('-topmost', 1)
 st.title("Welcome to the Kinney:Out Results Viewer")
 #uploaded_files = st.file_uploader("Please select .csv files for data.", accept_multiple_files=True, type=['csv'])
 
-
 #create a df that is a concationation of all .csv files
 all_df = pd.DataFrame()
 
@@ -356,6 +386,7 @@ if 'load_case_list' not in st.session_state:
 if 'file_list' not in st.session_state:
     st.session_state.file_list = []
     
+#session state variable to linearize without resetting the displayed plot
 if 'linearize_not_update' not in st.session_state:
     st.session_state.linearize_not_update = False
 if 'display_fig' not in st.session_state:
@@ -561,9 +592,6 @@ if len(st.session_state.uploaded_df) != 0:
         
 
 
-
-
-
     #make plot using user-selected rows of data. 
     if st.session_state.graph_df.empty == False:
         #copy graph_df to new_graph_df
@@ -577,7 +605,7 @@ if len(st.session_state.uploaded_df) != 0:
         st.session_state["graph_df_indices"] = index_legends
         
         #initial construction of the plot given graph_df
-        data_plot = plot.plot(st.session_state.graph_df, legends=index_legends, 
+        data_plot = plot.plot(st.session_state.graph_df, legends=get_legends(), 
                               x_title=(indices[0])[2], y_title=(indices[1])[2],
                               title=(indices[1])[2]+' vs '+(indices[0])[2])
         
