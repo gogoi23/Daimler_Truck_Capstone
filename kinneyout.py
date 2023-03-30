@@ -205,7 +205,6 @@ def get_legends():
     index_legends = []
     for tup in indices[np.arange(1, len(indices),2)]:
         index_legends = np.append(index_legends, tup[2])
-    st.session_state["graph_df_indices"] = index_legends
     return index_legends
 
 def linearization(container):
@@ -215,10 +214,11 @@ def linearization(container):
     of data to linearize
     """
     
-    with container.form(key="linearization_menu"):
-        #widgets to select which line to linearize
-        parameter = st.selectbox(label="linearization selectbox", options=st.session_state.graph_df_indices, 
-                     index=0, key="linearization_data_select", label_visibility="collapsed")
+    col1, col2 = container.columns([1,1])
+    
+    legends = get_legends()
+    slopes = []
+    with col1.form(key="linearization_menu"):
         #widgets to define x-range to linearize
         lower_bound = st.number_input("Min value: ", value=0.0, step=0.0001, 
                                   format='%.4f', key=f'linearization_lower_x')
@@ -228,17 +228,31 @@ def linearization(container):
         submitted = st.form_submit_button("Enter")
         if submitted:
             #linearize (finding the slope) of the line selected within the x-range selected
-            idx = np.where(st.session_state.graph_df_indices==parameter)[0][0]
-            X = np.array(st.session_state.new_graph_df.iloc[2*idx])
-            Y = np.array(st.session_state.new_graph_df.iloc[2*idx+1])[(X>lower_bound) & (X<upper_bound)]
-            X = X[(X>lower_bound) & (X<upper_bound)]
+            for i in range(len(legends)):
+                X = np.array(st.session_state.new_graph_df.iloc[2*i])
+                Y = np.array(st.session_state.new_graph_df.iloc[2*i+1])[(X>lower_bound) & (X<upper_bound)]
+                X = X[(X>lower_bound) & (X<upper_bound)]
+                if X.size == 0 or Y.size == 0:
+                    slopes = np.append(slopes, None)
+                else:
+                    slopes = np.append(slopes, np.polyfit(X, Y, 1)[0])
             
-            #report error if the range contains no data
-            if X.size == 0 or Y.size == 0: 
-                st.error("Please select a range with data.", icon="🚨")
-            else:
-                st.session_state.linearize_not_update = True
-                return np.polyfit(X, Y, 1)[0]
+            #set to true so that the displayed plot does not refresh/reset after linearizing
+            st.session_state.linearize_not_update = True
+    
+    #display a table with the slope of each line
+    if len(slopes) > 0:
+        #suppress index column of the table when displaying it
+        hide_table_row_index = """
+            <style>
+            thead tr th:first-child {display:none}
+            tbody th {display:none}
+            </style>
+            """
+        st.markdown(hide_table_row_index, unsafe_allow_html=True)
+        
+        slopes = [np.around(n, decimals=4) if n is not None else None for n in slopes]
+        col2.table(np.transpose([legends, slopes]))
             
 #Modifies new_graph_df with offsets from customization menu
 def update_new_graph_df(x_offsets, y_offsets):
@@ -610,9 +624,7 @@ if len(st.session_state.uploaded_df) != 0:
                               title=(indices[1])[2]+' vs '+(indices[0])[2])
         
         tab1, tab2 = st.tabs(['Adjust Chart', 'Linearize'])
-        slope1 = linearization(tab2)
-        if slope1:
-            tab2.write(f'Slope: {round(slope1, 4)}')
+        linearization(tab2)
         
         #construct new plot with user input, also updates new_graph_df to represent data shown in new plot
         new_data_plot = customize_plot(data_plot, tab1)
