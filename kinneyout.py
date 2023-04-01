@@ -189,31 +189,119 @@ def convert_df(df):
     # IMPORTANT: Cache the conversion to prevent computation on every rerun
     return df.to_csv().encode('utf-8')
 
-#creates widget/options to offset a given trace/line
+
+@st.cache
+def get_legends():
+    """
+    Iterate through graph_df to get the row names of the y-parameter
+    of each line. These will be used in the legends of the plot.
+
+    Returns the row names found.
+    """
+    
+    #getting the names of the y-parameters to use as legends in the plot
+    indices = np.array(st.session_state.graph_df.index)
+    index_legends = []
+    for tup in indices[np.arange(1, len(indices),2)]:
+        index_legends = np.append(index_legends, tup[2])
+    return index_legends
+
+def linearization(container):
+    """
+    Creates region of the page with all the widgets to linearize the data.
+    The user will select which line to linearize and define an x-range
+    of data to linearize
+    """
+    
+    col1, col2 = container.columns([1,1])
+    
+    legends = get_legends()
+    slopes = []
+    with col1.form(key="linearization_menu"):
+        #widgets to define x-range to linearize
+        lower_bound = st.number_input("Min value: ", value=0.0, step=0.0001, 
+                                  format='%.4f', key=f'linearization_lower_x')
+        upper_bound = st.number_input("Max value: ", value=0.0, step=0.0001, 
+                                  format='%.4f', key=f'linearization_upper_x')  
+        
+        submitted = st.form_submit_button("Enter")
+        if submitted:
+            #linearize (finding the slope) of the line selected within the x-range selected
+            for i in range(len(legends)):
+                X = np.array(st.session_state.new_graph_df.iloc[2*i])
+                Y = np.array(st.session_state.new_graph_df.iloc[2*i+1])[(X>lower_bound) & (X<upper_bound)]
+                X = X[(X>lower_bound) & (X<upper_bound)]
+                if X.size == 0 or Y.size == 0:
+                    slopes = np.append(slopes, None)
+                else:
+                    slopes = np.append(slopes, np.polyfit(X, Y, 1)[0])
+            
+            #set to true so that the displayed plot does not refresh/reset after linearizing
+            st.session_state.linearize_not_update = True
+    
+    #display a table with the slope of each line
+    if len(slopes) > 0:
+        #suppress index column of the table when displaying it
+        hide_table_row_index = """
+            <style>
+            thead tr th:first-child {display:none}
+            tbody th {display:none}
+            </style>
+            """
+        st.markdown(hide_table_row_index, unsafe_allow_html=True)
+        
+        slopes = [np.around(n, decimals=4) if n is not None else None for n in slopes]
+        col2.table(np.transpose([legends, slopes]))
+            
+#Modifies new_graph_df with offsets from customization menu
+def update_new_graph_df(x_offsets, y_offsets):
+    for i, (x_off, y_off) in enumerate(zip(x_offsets, y_offsets)):
+        st.session_state.new_graph_df.iloc[2*i] = st.session_state.graph_df.iloc[2*i] + x_off
+        st.session_state.new_graph_df.iloc[2*i+1] = st.session_state.graph_df.iloc[2*i+1] + y_off
+
+#Copies graph_df into new_graph_df
+def reset_new_graph_df():
+    st.session_state.new_graph_df = st.session_state.graph_df.copy()
+
 def adjust_trace(label, idx, container):
+    """
+    Creates widget/options to offset a given trace/line.
+    Will be called multiple times by customize_plot() for 
+    each line of the current plot.
+
+    Returns the user-input x- and y-offsets for the given line.
+    """
     col1, col2 = container.columns(2)
+    #only add tooltop to first row of widgets
     if idx == 0:
-        x_off = col1.number_input(label + ' x-offset', value=0.0, key=f'{label}{idx}_x-off',
+        x_off = col1.number_input(label + ' x-offset', value=0.0, step=0.0001, 
+                                  format='%.4f', key=f'{label}{idx}_x-off',
                                   help="""Offset a line in the x-direction. Each line can have 
                                   its own x-offset. The widget which changes a given line is 
                                   labeled with the y-parameter used to create the line. If the 
                                   legends of the graph are unchanged, the y-parameters for the lines
                                   can be found there.""")
-        y_off = col2.number_input(label + ' y-offset', value=0.0, key=f'{label}{idx}_y-off',
+        y_off = col2.number_input(label + ' y-offset', value=0.0, step=0.0001, 
+                                  format='%.4f', key=f'{label}{idx}_y-off',
                                   help="""Offset a line in the y-direction. Each line can have 
                                   its own y-offset. The widget which changes a given line is 
                                   labeled with the y-parameter used to create the line. If the 
                                   legends of the graph are unchanged, the y-parameters for the lines
                                   can be found there.""")
     else:
-        x_off = col1.number_input(label + ' x-offset', value=0.0, key=f'{label}{idx}_x-off')
-        y_off = col2.number_input(label + ' y-offset', value=0.0, key=f'{label}{idx}_y-off')
+        x_off = col1.number_input(label + ' x-offset', value=0.0, step=0.0001, key=f'{label}{idx}_x-off')
+        y_off = col2.number_input(label + ' y-offset', value=0.0, step=0.0001, key=f'{label}{idx}_y-off')
     return x_off, y_off
 
-#creates region of the page with all the widgets to customize/adjust the plot
-def customize_plot(fig):
-    expander = st.expander('Adjust chart')
-    with expander.form(key='update_plot'):
+def customize_plot(fig, container):
+    """
+    Creates region of the page with all the widgets to customize/adjust the plot.
+    The user can set the x-range and y-range of the plot, offset individual lines
+    in the x- or y-direction, display or hide flags, or recolor a line.
+
+    Returns the plot with updated axes-ranges, offsets, and flag visibilities
+    """
+    with container.form(key='update_plot'):
         #getting current axes ranges of the plot
         x_mins, x_maxs, y_mins, y_maxs = [], [], [], []
         legends = []
@@ -228,7 +316,7 @@ def customize_plot(fig):
         y_min = float(np.min(y_mins))
         y_max = float(np.max(y_maxs))
         
-        #options to adjust x-axis bounds
+        #widgets to adjust x-axis bounds
         col1_1, col1_2, col2_1, col2_2 = st.columns(4)
         x_axis_lower = col1_1.number_input('X-axis range', value=x_min, step=0.0001,
                                         format='%.4f', key='x_axis_lower',
@@ -236,7 +324,7 @@ def customize_plot(fig):
         x_axis_upper = col1_2.number_input(' ', value=x_max, step=0.0001, 
                                         format='%.4f', key='x_axis_upper', #label_visibility='hidden',
                                         help="Enter a number to set as the upper bound of the x-axis of the graph.")
-        #options to adjust y-axis bounds
+        #widgets to adjust y-axis bounds
         y_axis_lower = col2_1.number_input('Y-axis range', value=y_min, step=0.0001, 
                                         format='%.4f', key='y_axis_lower',
                                         help="Enter a number to set as the lower bound of the y-axis of the graph.")
@@ -246,7 +334,7 @@ def customize_plot(fig):
         x_range = [x_axis_lower, x_axis_upper]
         y_range = [y_axis_lower, y_axis_upper]
         
-        #options to adjust offsets of each trace/lines
+        #widgets to adjust offsets of each trace/lines
         trace_update = np.array(list(map(partial(adjust_trace, container=st), legends, np.arange(len(legends)))))
 
         #create color picker widgets to adjust color of lines
@@ -268,7 +356,7 @@ def customize_plot(fig):
         for i in range(legends.size,5):
             color_selectors[i].empty()
 
-        #options to add flags to the four quadrants
+        #widgets to add flags to the four quadrants
         col1, col2, col3, col4 = st.columns(4)
         quadrant1_show = col1.checkbox('Show Quadrant I flag', key='quadrant1_show')
         quadrant2_show = col2.checkbox('Show Quadrant II flag', key='quadrant2_show')
@@ -276,8 +364,15 @@ def customize_plot(fig):
         quadrant4_show = col4.checkbox('Show Quadrant IV flag', key='quadrant4_show')
         
         submitted = st.form_submit_button('Update chart')
-        expander.button('Reset chart', key='reset_chart_button')
+        
+        #if resetting the plot, new_graph_df needs to be reset to graph_df
+        if container.button('Reset chart', key='reset_chart_button'):
+            reset_new_graph_df()
+            
         if submitted:
+            #if submitting, new_graph_df needs to be updated with any potential offsets
+            update_new_graph_df(trace_update[:,0].astype(float), trace_update[:,1].astype(float))
+            #need to actually update the plot itself
             new_fig = plot.update(fig, x_lim=x_range, y_lim=y_range,
                                 quad1_show=quadrant1_show, quad2_show=quadrant2_show,
                                 quad3_show=quadrant3_show, quad4_show=quadrant4_show,
@@ -313,6 +408,9 @@ all_df = pd.DataFrame()
 #initalize all session state variables
 if 'graph_df' not in st.session_state:
     st.session_state.graph_df = pd.DataFrame()
+#a new_graph_df session var needed for linearization functionality
+if 'new_graph_df' not in st.session_state:
+    st.session_state.new_graph_df = st.session_state.graph_df.copy()
 if 'uploaded_df' not in st.session_state:
     st.session_state.uploaded_df = pd.DataFrame()
 if 'vehicle_list' not in st.session_state:
@@ -321,6 +419,14 @@ if 'load_case_list' not in st.session_state:
     st.session_state.load_case_list = []
 if 'file_list' not in st.session_state:
     st.session_state.file_list = []
+    
+#session state variable to linearize without resetting the displayed plot
+if 'linearize_not_update' not in st.session_state:
+    st.session_state.linearize_not_update = False
+if 'display_fig' not in st.session_state:
+    st.session_state.display_fig = None
+
+#session state variable for standard plots
 if 'df' not in st.session_state:
     st.session_state.df = pd.DataFrame()
 if 'standard_df' not in st.session_state:
@@ -689,27 +795,41 @@ if len(st.session_state.uploaded_df) != 0:
 
     #make plot using user-selected rows of data. 
     if st.session_state.graph_df.empty == False:
+        #copy graph_df to new_graph_df
+        st.session_state.new_graph_df = st.session_state.graph_df.copy()
+        
+        #getting the names of the y-parameters to use as legends in the plot
         indices = np.array(st.session_state.graph_df.index)
         index_legends = []
         for tup in indices[np.arange(1, len(indices),2)]:
             index_legends = np.append(index_legends, tup[2])
-            
-        data_plot = plot.plot(st.session_state.graph_df, legends=index_legends, 
+        st.session_state["graph_df_indices"] = index_legends
+        
+        #initial construction of the plot given graph_df
+        data_plot = plot.plot(st.session_state.graph_df, legends=get_legends(), 
                               x_title=(indices[0])[2], y_title=(indices[1])[2],
                               title=(indices[1])[2]+' vs '+(indices[0])[2])
-
-        new_data_plot = customize_plot(data_plot)
+        
+        tab1, tab2 = st.tabs(['Adjust Chart', 'Linearize'])
+        linearization(tab2)
+        
+        #construct new plot with user input, also updates new_graph_df to represent data shown in new plot
+        new_data_plot = customize_plot(data_plot, tab1)
+        if not st.session_state.linearize_not_update:        
+            st.session_state.display_fig = new_data_plot
+        else:
+            st.session_state.linearize_not_update = False
         
         #Plotly chart configurations
         config = dict({'scrollZoom': True,
                    'displayModeBar': True,
                    'editable': True})
         
-        st.plotly_chart(new_data_plot, use_container_width=False, config=config)
+        st.plotly_chart(st.session_state.display_fig, use_container_width=False, config=config)
         
-        
-        #export dataset as csv
         st.write(st.session_state.graph_df)
+        #st.write(st.session_state.new_graph_df)
+
         graph_csv = convert_df(st.session_state.graph_df)
         col1, col2 = st.columns([3, 1])
         with col1:
