@@ -1,4 +1,4 @@
-# importing the required module
+# importing the required modules
 from cgitb import reset
 from codecs import ignore_errors
 import re
@@ -21,6 +21,13 @@ from streamlit.elements.form import current_form_id
 import tkinter as tk
 from tkinter import ttk
 from tkinter import filedialog as fd
+
+
+#######################################
+#   
+#   Definitions of functions used
+#
+#######################################
 
 #converting a list to a string for filenames
 def listToString(s):
@@ -177,7 +184,8 @@ def create_graph_df(d, v, lc, x, y):
 
     return pd.concat([st.session_state.graph_df, return_df])
 
-
+#gets the load case from the graph to ensure that the user is unable to
+#add a new graph with a different load case
 def check_graph_lc(aad, s, gcv):
     if st.session_state.graph_df.empty:
         st.session_state.load_case = [*set(get_load_case(aad, gcv))]
@@ -368,7 +376,11 @@ def customize_plot(fig, container):
     return fig
 
 
-#START OF MAIN CODE
+#######################################
+#   
+#   Start of main code
+#
+#######################################
 
 # Set up tkinter
 root = tk.Tk()
@@ -418,7 +430,11 @@ if 'standard_filename' not in st.session_state:
 if 'standard_plot' not in st.session_state:
     st.session_state.standard_plot = ""
 
-# Folder picker submit form
+#######################################
+#   
+#   File picker widget
+#
+#######################################
 with st.form("file picker"):
     st.write('_(Optional)_ Input a starting path to browse files:')
 
@@ -487,7 +503,11 @@ with st.form("file picker"):
                 remove_duplicate_files(filenames)
                 c1.success('File(s) added: ' + str([f for f in filenames]), icon="✅")
 
-#file delete form
+#######################################
+#   
+#  File remove widget
+#
+#######################################
 with st.container():
     c1, c2 = st.columns([5,1])
     files_to_remove = {}
@@ -519,6 +539,11 @@ with st.container():
                 #rerun the app to show the updated file list        
                 st.experimental_rerun()
 
+#######################################
+#   
+#   Main functionality of kinney:out
+#
+#######################################
 #check whether user has uploaded any files
 if len(st.session_state.uploaded_df) != 0:
     #if so, run through files and run rest of code
@@ -533,9 +558,8 @@ if len(st.session_state.uploaded_df) != 0:
 
     graph_tab, dataset_tab, standard_plot_tab = st.sidebar.tabs(["Graph", "Dataset Manipulation", "Standard Plot"])
 
+    ############  GRAPH TAB  ##############
     with graph_tab:
-        #keeping track of number of graphs
-
         graph_selected_vehicle = st.selectbox("Select a vehicle", [*set(get_vehicle(all_axis_df))], key="graph_vehicle_select")
         if 'load_case' not in st.session_state:
             st.session_state.load_case = [*set(get_load_case(all_axis_df, graph_selected_vehicle))]
@@ -544,27 +568,32 @@ if len(st.session_state.uploaded_df) != 0:
         x_axis = st.selectbox("Select an X axis", get_dataset(all_axis_df, graph_selected_vehicle, graph_selected_lc), key="x_axis")
         y_axis = st.selectbox("Select a Y axis", get_dataset(all_axis_df, graph_selected_vehicle, graph_selected_lc), key="y_axis")
 
+        #create three column containers for each of the buttons
         col1, col2, col3 = st.columns([12,16,12], gap='small')
+        #adding the graph to a plot
         with col1:
             update_graph = st.button("Add graph",  key="add graph")
             if update_graph:
+                #making sure there is a max of 5 graphs on the plot
                 if len(st.session_state.graph_df) == 10:
                     graph_tab.error('Error: Graph not added. Max number of graphs is 5.', icon="🚨")
                 else:
                     st.session_state.graph_df = create_graph_df(all_axis_df, graph_selected_vehicle, graph_selected_lc, x_axis, y_axis)
                     graph_tab.success('Graph added!', icon="✅")
-                
+        #deleting last added graph from plot
         with col2:
             del_graph = st.button("Delete last graph", key="del graph")
             if del_graph:
                 st.session_state.graph_df = st.session_state.graph_df[:-2]
                 graph_tab.error('Last added graph removed.', icon="🚨")
+        #clearing graph from the plot
         with col3:
             del_all_graph = st.button("Clear graph", key="clear graph")
             if del_all_graph:
                 st.session_state.graph_df = pd.DataFrame()
                 graph_tab.error('All graphs removed.', icon="🚨")
 
+     ############  DATASET TAB  ##############
     with dataset_tab:
         #select box widget to choose vehicle dataset
         selected_vehicle = st.selectbox("Select a vehicle", [*set(get_vehicle(all_axis_df))], key="vehicle_select")
@@ -615,6 +644,8 @@ if len(st.session_state.uploaded_df) != 0:
                 #update all_axis_df based on deleted rows
                 all_axis_df = pd.concat([all_df, st.session_state.df])
                 st.experimental_rerun()
+
+     ############  STANDARD PLOT TAB  ##############
     with standard_plot_tab:
         with st.form('standard_plot_file'):
             #get path by user
@@ -721,10 +752,10 @@ if len(st.session_state.uploaded_df) != 0:
                         #create a line of best fit based on the values found above where a is the slope and b is the y intercept
                         a, b = np.polyfit(trimmedXAxis, trimmedYAxis, 1)
 
-                        st.write(f"Linearization Value: **{str(a)}**  based on the range " + str(stdLinMin) + " to " + str(stdLinMax))
+                        st.write(f"Linearization Value: **{str(round(a, 8))}**  based on the range " + str(stdLinMin) + " to " + str(stdLinMax))
                         
-                        #FOR TESTING PURPOSES*** showing the line of best fit
-                        #linearBestFit = go.Line(x=trimmedXAxis,y=a*trimmedXAxis+b,name='Linear Line of Best Fit')
+                        #showing the line of best fit
+                        linearBestFit = go.Line(x=trimmedXAxis,y=a*trimmedXAxis+b,name='Linear Line of Best Fit')
 
                         #this is the data plot that gets graphed 
                         data_plot = plot.plot(
@@ -751,11 +782,12 @@ if len(st.session_state.uploaded_df) != 0:
                         #this sets the offests,quadrant flags, and x and ytitles. 
                         data_plot = plot.update(data_plot,
                             x_offsets = [x_offsetValue],
-                            y_offsets = [y_offsetValue]
+                            y_offsets = [y_offsetValue],
+                            colors=[]
                         )
 
-                        #FOR TESTING PURPOSES*** showing the line of best fit
-                        #data_plot.add_trace(linearBestFit)
+                        #showing the line of best fit
+                        data_plot.add_trace(linearBestFit)
 
                         #return the data plot to be graphed on the main page rather than side bar
                         st.session_state.standard_plot = data_plot
@@ -767,14 +799,21 @@ if len(st.session_state.uploaded_df) != 0:
         if st.session_state.standard_plot != "" and st.session_state.graph_df.empty == False:
             st.warning("Don't see your standard plot? Try clearing the main graph first.", icon="⚠️")
 
+    #######################################
+    #   
+    #   plotting on webpage
+    #
+    #######################################
+
     #plot the standard plot if there is no graph on other tab
     if st.session_state.standard_plot != "" and st.session_state.graph_df.empty:
         config = dict({'scrollZoom': True,
                             'displayModeBar': True,
                             'editable': True})
         tab1, tab2 = st.tabs(['Adjust Chart', 'Linearize'])
-        new_data_plot = customize_plot(st.session_state.standard_plot, tab1)
-        st.plotly_chart(st.session_state.standard_plot, use_container_width=False, config=config)
+        new_data_plot = customize_plot(st.session_state.standard_plot, tab1).update_layout(autosize=True)
+        st.session_state.standard_plot.update_layout(autosize=True)
+        st.plotly_chart(new_data_plot, use_container_width=True, config=config)
 
     #make plot using user-selected rows of data. 
     if st.session_state.graph_df.empty == False:
@@ -805,6 +844,7 @@ if len(st.session_state.uploaded_df) != 0:
         
         st.write(st.session_state.graph_df)
 
+        #downloading the dataset that has been manipulated
         graph_csv = convert_df(st.session_state.graph_df)
         col1, col2 = st.columns([3, 1])
         with col1:
