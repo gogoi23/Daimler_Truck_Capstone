@@ -198,7 +198,6 @@ def convert_df(df):
     return df.to_csv().encode('utf-8')
 
 
-@st.cache
 def get_legends():
     """
     Iterate through graph_df to get the row names of the y-parameter
@@ -234,10 +233,10 @@ def linearization(container):
         
         submitted = st.form_submit_button("Enter")
         if submitted:
-            #linearize (finding the slope) of the line selected within the x-range selected
-            for i in range(len(legends)):
-                X = np.array(st.session_state.new_graph_df.iloc[2*i])
-                Y = np.array(st.session_state.new_graph_df.iloc[2*i+1])[(X>lower_bound) & (X<upper_bound)]
+            #linearize (finding the slope) of each line within the x-range selected
+            for trace in st.session_state.display_fig.data:
+                X = np.array(trace['x'])
+                Y = np.array(trace['y'])[(X>lower_bound) & (X<upper_bound)]
                 X = X[(X>lower_bound) & (X<upper_bound)]
                 if X.size == 0 or Y.size == 0:
                     slopes = np.append(slopes, None)
@@ -261,16 +260,6 @@ def linearization(container):
         slopes = [np.around(n, decimals=4) if n is not None else None for n in slopes]
         col2.table(np.transpose([legends, slopes]))
             
-#Modifies new_graph_df with offsets from customization menu
-def update_new_graph_df(x_offsets, y_offsets):
-    for i, (x_off, y_off) in enumerate(zip(x_offsets, y_offsets)):
-        st.session_state.new_graph_df.iloc[2*i] = st.session_state.graph_df.iloc[2*i] + x_off
-        st.session_state.new_graph_df.iloc[2*i+1] = st.session_state.graph_df.iloc[2*i+1] + y_off
-
-#Copies graph_df into new_graph_df
-def reset_new_graph_df():
-    st.session_state.new_graph_df = st.session_state.graph_df.copy()
-
 def adjust_trace(label, idx, container):
     """
     Creates widget/options to offset a given trace/line.
@@ -373,22 +362,17 @@ def customize_plot(fig, container):
         
         submitted = st.form_submit_button('Update chart')
         
+        container.button('Reset chart', key='reset_chart_button')
+        
         if submitted:
-            #if submitting, new_graph_df needs to be updated with any potential offsets
-            update_new_graph_df(trace_update[:,0].astype(float), trace_update[:,1].astype(float))
             #need to actually update the plot itself
             new_fig = plot.update(fig, x_lim=x_range, y_lim=y_range,
                                 quad1_show=quadrant1_show, quad2_show=quadrant2_show,
                                 quad3_show=quadrant3_show, quad4_show=quadrant4_show,
                                 x_offsets=trace_update[:,0].astype(float), y_offsets=trace_update[:,1].astype(float),
-                                colors=colors,
+                                colors=colors
                                 )
             return new_fig
-        
-    #if resetting the plot, new_graph_df needs to be reset to graph_df
-    if container.button('Reset chart', key='reset_chart_button'):
-        reset_new_graph_df()
-
     return fig
 
 
@@ -421,9 +405,6 @@ all_df = pd.DataFrame()
 #initalize all session state variables
 if 'graph_df' not in st.session_state:
     st.session_state.graph_df = pd.DataFrame()
-#a new_graph_df session var needed for linearization functionality
-if 'new_graph_df' not in st.session_state:
-    st.session_state.new_graph_df = st.session_state.graph_df.copy()
 if 'uploaded_df' not in st.session_state:
     st.session_state.uploaded_df = pd.DataFrame()
 if 'vehicle_list' not in st.session_state:
@@ -764,7 +745,7 @@ if len(st.session_state.uploaded_df) != 0:
                             stdLinMax = current['StandardLinearMax']
 
                         #get the indices and values in the range of the linearmin and linearmax values
-                        trimmedIndices = np.where((xAxisValues >= stdLinMin) & (xAxisValues <= stdLinMax))
+                        trimmedIndices = np.where((xAxisValues >= float(stdLinMin)) & (xAxisValues <= float(stdLinMax)))
                         trimmedXAxis = xAxisValues[trimmedIndices]
                         trimmedYAxis = yAxisValues[trimmedIndices]
 
@@ -829,30 +810,25 @@ if len(st.session_state.uploaded_df) != 0:
         config = dict({'scrollZoom': True,
                             'displayModeBar': True,
                             'editable': True})
-        new_data_plot = st.session_state.standard_plot.update_layout(autosize=True)
+        tab1, tab2 = st.tabs(['Adjust Chart', 'Linearize'])
+        new_data_plot = customize_plot(st.session_state.standard_plot, tab1).update_layout(autosize=True)
+        st.session_state.standard_plot.update_layout(autosize=True)
         st.plotly_chart(new_data_plot, use_container_width=True, config=config)
 
     #make plot using user-selected rows of data. 
     if st.session_state.graph_df.empty == False:
-        #copy graph_df to new_graph_df
-        st.session_state.new_graph_df = st.session_state.graph_df.copy()
-        
-        #getting the names of the y-parameters to use as legends in the plot
-        indices = np.array(st.session_state.graph_df.index)
-        index_legends = []
-        for tup in indices[np.arange(1, len(indices),2)]:
-            index_legends = np.append(index_legends, tup[2])
-        st.session_state["graph_df_indices"] = index_legends
+        x_axis_title = st.session_state.graph_df.index[0][2]
+        y_axis_title = st.session_state.graph_df.index[1][2]
         
         #initial construction of the plot given graph_df
         data_plot = plot.plot(st.session_state.graph_df, legends=get_legends(), 
-                              x_title=(indices[0])[2], y_title=(indices[1])[2],
-                              title=(indices[1])[2]+' vs '+(indices[0])[2])
+                              x_title=x_axis_title, y_title=y_axis_title,
+                              title=x_axis_title+' vs '+y_axis_title)
         
         tab1, tab2 = st.tabs(['Adjust Chart', 'Linearize'])
         linearization(tab2)
         
-        #construct new plot with user input, also updates new_graph_df to represent data shown in new plot
+        #construct new plot with user input
         new_data_plot = customize_plot(data_plot, tab1)
         if not st.session_state.linearize_not_update:        
             st.session_state.display_fig = new_data_plot
@@ -864,10 +840,9 @@ if len(st.session_state.uploaded_df) != 0:
                    'displayModeBar': True,
                    'editable': True})
         
-        st.plotly_chart(st.session_state.display_fig, use_container_width=False, config=config)
+        st.plotly_chart(st.session_state.display_fig, use_container_width=True, config=config)
         
         st.write(st.session_state.graph_df)
-        #st.write(st.session_state.new_graph_df)
 
         #downloading the dataset that has been manipulated
         graph_csv = convert_df(st.session_state.graph_df)
