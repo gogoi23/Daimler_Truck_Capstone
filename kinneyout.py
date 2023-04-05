@@ -840,7 +840,7 @@ if len(st.session_state.uploaded_df) != 0:
                    'displayModeBar': True,
                    'editable': True})
         
-        st.plotly_chart(st.session_state.display_fig, use_container_width=False, config=config)
+        st.plotly_chart(st.session_state.display_fig, use_container_width=True, config=config)
         
         st.write(st.session_state.graph_df)
 
