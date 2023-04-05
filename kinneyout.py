@@ -772,8 +772,8 @@ if len(st.session_state.uploaded_df) != 0:
         config = dict({'scrollZoom': True,
                             'displayModeBar': True,
                             'editable': True})
-        # tab1, tab2 = st.tabs(['Adjust Chart', 'Linearize'])
-        # new_data_plot = customize_plot(st.session_state.standard_plot, tab1)
+        tab1, tab2 = st.tabs(['Adjust Chart', 'Linearize'])
+        new_data_plot = customize_plot(st.session_state.standard_plot, tab1)
         st.plotly_chart(st.session_state.standard_plot, use_container_width=False, config=config)
 
     #make plot using user-selected rows of data. 

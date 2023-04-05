@@ -46,28 +46,28 @@ def plot(data, x_lim=None, y_lim=None, title=None,
     #add quadrant flags if provided, otherwise set default flags and hide them
     margins = 0.075
     fig.add_annotation(
-        text=quad1_title if quad1_title is not None else 'Click to enter Quadrant I flag',
+        text=quad1_title if quad1_title is not None and quad1_title  else 'Click to enter Quadrant I flag',
         xref='paper', yref='paper',
         x=1-margins, y=1-margins, showarrow=False,
-        opacity=1 if quad1_title is not None else 0
+        opacity=1 if quad1_title is not None and quad1_title else 0
     )
     fig.add_annotation(
-        text=quad2_title if quad2_title is not None else 'Click to enter Quadrant II flag',
+        text=quad2_title if quad2_title is not None and quad2_title else 'Click to enter Quadrant II flag',
         xref='paper', yref='paper',
         x=margins, y=1-margins, showarrow=False,
-        opacity=1 if quad2_title is not None else 0
+        opacity=1 if quad2_title is not None and quad2_title else 0
     )
     fig.add_annotation(
-        text=quad3_title if quad3_title is not None else 'Click to enter Quadrant III flag',
+        text=quad3_title if quad3_title is not None and quad3_title else 'Click to enter Quadrant III flag',
         xref='paper', yref='paper',
         x=margins, y=margins, showarrow=False,
-        opacity=1 if quad3_title is not None else 0
+        opacity=1 if quad3_title is not None and quad3_title else 0
     )
     fig.add_annotation(
-        text=quad4_title if quad4_title is not None else 'Click to enter Quadrant IV flag',
+        text=quad4_title if quad4_title is not None and quad4_title else 'Click to enter Quadrant IV flag',
         xref='paper', yref='paper',
         x=1-margins, y=margins, showarrow=False,
-        opacity=1 if quad4_title is not None else 0
+        opacity=1 if quad4_title is not None and quad3_title else 0
     )
     
     return fig
