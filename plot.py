@@ -127,13 +127,18 @@ def update(fig, x_lim=None, y_lim=None,
         )
     
     #updates offsets of individual traces
-    index = 0
-    for trace, x_off, y_off in zip(fig.data, x_offsets, y_offsets):
-        trace['x'] = np.add(trace['x'], x_off)
-        trace['y'] = np.add(trace['y'], y_off)
-        if len(colors) != 0:
-            trace.line.color = colors[index]
-        index += 1
+    if x_offsets is not None:
+        for trace, x_off in zip(fig.data, x_offsets):
+            trace['x'] = np.add(trace['x'], x_off)
+    if y_offsets is not None:
+        for trace, y_off in zip(fig.data, y_offsets):
+            trace['y'] = np.add(trace['y'], y_off)
+            
+    #updates colors of individual traces
+    if colors is not None:
+        for trace, color in zip(fig.data, colors):
+            trace.line.color = color
+        
     return fig
 
 #for testing purposes
